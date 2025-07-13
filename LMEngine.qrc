@@ -1,0 +1,49 @@
+<RCC>
+    <qresource prefix="/images">
+        <file>Resource/images/RecordButton_Start_bg.png</file>
+        <file>Resource/images/RecordButton_Stop_bg.png</file>
+        <file>Resource/images/skyBox_back.jpg</file>
+        <file>Resource/images/skyBox_bottom.jpg</file>
+        <file>Resource/images/skyBox_front.jpg</file>
+        <file>Resource/images/skyBox_left.jpg</file>
+        <file>Resource/images/skyBox_right.jpg</file>
+        <file>Resource/images/skyBox_top.jpg</file>
+    </qresource>
+    <qresource prefix="/models">
+        <file>Resource/models/dragon.obj</file>
+        <file>Resource/models/dragon_diffuse.png</file>
+        <file>Resource/models/dragon_normal.png</file>
+        <file>Resource/models/dragon_specular.png</file>
+        <file>Resource/models/monkey.obj</file>
+        <file>Resource/models/monkey_diffuse.png</file>
+        <file>Resource/models/monkey_normal.png</file>
+        <file>Resource/models/monkey_specular.png</file>
+        <file>Resource/models/tortoise.obj</file>
+        <file>Resource/models/tortoise_diffuse.png</file>
+        <file>Resource/models/tortoise_normal.png</file>
+        <file>Resource/models/tortoise_specular.png</file>
+    </qresource>
+    <qresource prefix="/shaders">
+        <file>Resource/shaders/yuvOffSecreen.fs</file>
+        <file>Resource/shaders/yuvOffsecreen.vs</file>
+        <file>Resource/shaders/mainWidget.fs</file>
+        <file>Resource/shaders/mainWidget.vs</file>
+        <file>Resource/shaders/skyBox.fs</file>
+        <file>Resource/shaders/skyBox.vs</file>
+        <file>Resource/shaders/frame.fs</file>
+        <file>Resource/shaders/frame.vs</file>
+        <file>Resource/shaders/mesh.fs</file>
+        <file>Resource/shaders/mesh.vs</file>
+    </qresource>
+    <qresource prefix="/stickers">
+        <file>Resource/stickers/item_cracehat.png</file>
+        <file>Resource/stickers/item_foxsticker.png</file>
+        <file>Resource/stickers/item_sticker_blueglass.png</file>
+        <file>Resource/stickers/item_sticker_glass2.png</file>
+        <file>Resource/stickers/item_sticker_sunhat2.png</file>
+        <file>Resource/stickers/item_sticker_sunhat3.png</file>
+        <file>Resource/stickers/item_stickerdog.png</file>
+        <file>Resource/stickers/item_stickerpig.png</file>
+        <file>Resource/stickers/item_stickerrabit.png</file>
+    </qresource>
+</RCC>

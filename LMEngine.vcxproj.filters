@@ -1,0 +1,321 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Form Files">
+      <UniqueIdentifier>{99349809-55BA-4b9d-BF79-8FDBB0286EB3}</UniqueIdentifier>
+      <Extensions>ui</Extensions>
+      <ParseFiles>false</ParseFiles>
+    </Filter>
+    <Filter Include="Form Files">
+      <UniqueIdentifier>{99349809-55BA-4b9d-BF79-8FDBB0286EB3}</UniqueIdentifier>
+      <Extensions>ui</Extensions>
+      <ParseFiles>false</ParseFiles>
+    </Filter>
+    <Filter Include="Generated Files">
+      <UniqueIdentifier>{71ED8ED8-ACB9-4CE9-BBE1-E00B30144E11}</UniqueIdentifier>
+      <Extensions>cpp;c;cxx;moc;h;def;odl;idl;res;</Extensions>
+    </Filter>
+    <Filter Include="Generated Files">
+      <UniqueIdentifier>{71ED8ED8-ACB9-4CE9-BBE1-E00B30144E11}</UniqueIdentifier>
+      <Extensions>cpp;c;cxx;moc;h;def;odl;idl;res;</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{D9D6E242-F8AF-46E4-B9FD-80ECBC20BA3E}</UniqueIdentifier>
+      <Extensions>qrc;*</Extensions>
+      <ParseFiles>false</ParseFiles>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{D9D6E242-F8AF-46E4-B9FD-80ECBC20BA3E}</UniqueIdentifier>
+      <Extensions>qrc;*</Extensions>
+      <ParseFiles>false</ParseFiles>
+    </Filter>
+    <Filter Include="Source">
+      <UniqueIdentifier>{5129e3a7-b9ab-40c2-bb49-e22987321e7d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Common">
+      <UniqueIdentifier>{e83259e5-c75d-4756-80cb-8b61f528550f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Widget">
+      <UniqueIdentifier>{e1632549-632f-4ef2-a7e0-c8a62e9faa9d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Widget\MainWidget">
+      <UniqueIdentifier>{03b18c39-df0b-4c97-bf6d-0571f79b4183}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Widget\OpenGLWidget">
+      <UniqueIdentifier>{5642813e-f1dd-4d3c-91ec-008b65a19168}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Widget\OpenGLWidget\SceneManager">
+      <UniqueIdentifier>{a8727c64-a177-4f76-8971-bd9183aaca65}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Widget\OpenGLWidget\SceneManager\Object">
+      <UniqueIdentifier>{5efc3f78-1630-4ed6-9fc0-d57daf91bacc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Widget\OpenGLWidget\SceneManager\Object\SkyBox">
+      <UniqueIdentifier>{7eff51a2-6951-47d2-9590-20377e383ce6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Widget\OpenGLWidget\SceneManager\Object\Model">
+      <UniqueIdentifier>{cbca5d26-760a-43df-9798-17626941aee5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Widget\OpenGLWidget\SceneManager\Object\Model\Mesh">
+      <UniqueIdentifier>{11c94a0d-5de8-4d27-bce4-4984593f5726}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Widget\OpenGLWidget\VideoCaptureThread">
+      <UniqueIdentifier>{5dfcbb70-3f1e-4b8a-813d-656208bc4447}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Widget\OpenGLWidget\VideoCaptureThread\YUVDraw">
+      <UniqueIdentifier>{72d524ae-d2e9-43c1-8bdd-6dc66f7bf266}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Widget\OpenGLWidget\SceneManager\Object\Frame">
+      <UniqueIdentifier>{0b0e73a4-d7ae-4512-a6ee-ca2ce98aada6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Widget\AVRecorder">
+      <UniqueIdentifier>{de6a14bd-eae1-42f5-b510-f17cf37a7021}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Common\ShaderProgram">
+      <UniqueIdentifier>{bfb19e2c-f94e-4ec8-be7e-bab85ca0799a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Common\Camera">
+      <UniqueIdentifier>{ff123935-7cdd-45a4-bf3c-e335c025e192}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="MainWidget.cpp">
+      <Filter>Source\Widget\MainWidget</Filter>
+    </ClCompile>
+    <ClCompile Include="OpenGLWidget\SceneManger\GLSceneManager.cpp">
+      <Filter>Source\Widget\OpenGLWidget\SceneManager</Filter>
+    </ClCompile>
+    <ClCompile Include="OpenGLWidget\OpenGLWidget.cpp">
+      <Filter>Source\Widget\OpenGLWidget</Filter>
+    </ClCompile>
+    <ClCompile Include="OpenGLWidget\VideoCaptureThread\VideoCaptureThread.cpp">
+      <Filter>Source\Widget\OpenGLWidget\VideoCaptureThread</Filter>
+    </ClCompile>
+    <ClCompile Include="OpenGLWidget\VideoCaptureThread\YUVDraw\GLYuvDraw.cpp">
+      <Filter>Source\Widget\OpenGLWidget\VideoCaptureThread\YUVDraw</Filter>
+    </ClCompile>
+    <ClCompile Include="OpenGLWidget\SceneManger\Object\Model\GLModel.cpp">
+      <Filter>Source\Widget\OpenGLWidget\SceneManager\Object\Model</Filter>
+    </ClCompile>
+    <ClCompile Include="OpenGLWidget\SceneManger\Object\Model\Mesh\GLMesh.cpp">
+      <Filter>Source\Widget\OpenGLWidget\SceneManager\Object\Model\Mesh</Filter>
+    </ClCompile>
+    <ClCompile Include="OpenGLWidget\SceneManger\Object\Frame\GLFrame.cpp">
+      <Filter>Source\Widget\OpenGLWidget\SceneManager\Object\Frame</Filter>
+    </ClCompile>
+    <ClCompile Include="OpenGLWidget\SceneManger\Object\SkyBox\GLSkyBox.cpp">
+      <Filter>Source\Widget\OpenGLWidget\SceneManager\Object\SkyBox</Filter>
+    </ClCompile>
+    <ClCompile Include="AVRecorder\AVRecorder.cpp">
+      <Filter>Source\Widget\AVRecorder</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\Camera\GLCamera.cpp">
+      <Filter>Source\Common\Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="Common\ShaderProgram\GLShaderProgram.cpp">
+      <Filter>Source\Common\ShaderProgram</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <QtMoc Include="MainWidget.h">
+      <Filter>Source\Widget\MainWidget</Filter>
+    </QtMoc>
+    <QtMoc Include="OpenGLWidget\SceneManger\GLSceneManager.h">
+      <Filter>Source\Widget\OpenGLWidget\SceneManager</Filter>
+    </QtMoc>
+    <QtMoc Include="OpenGLWidget\OpenGLWidget.h">
+      <Filter>Source\Widget\OpenGLWidget</Filter>
+    </QtMoc>
+    <QtMoc Include="OpenGLWidget\VideoCaptureThread\VideoCaptureThread.h">
+      <Filter>Source\Widget\OpenGLWidget\VideoCaptureThread</Filter>
+    </QtMoc>
+    <QtMoc Include="OpenGLWidget\VideoCaptureThread\YUVDraw\GLYuvDraw.h">
+      <Filter>Source\Widget\OpenGLWidget\VideoCaptureThread\YUVDraw</Filter>
+    </QtMoc>
+    <QtMoc Include="OpenGLWidget\SceneManger\Object\Frame\GLFrame.h">
+      <Filter>Source\Widget\OpenGLWidget\SceneManager\Object\Frame</Filter>
+    </QtMoc>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="debug\moc_predefs.h.cbt">
+      <Filter>Generated Files</Filter>
+    </CustomBuild>
+    <CustomBuild Include="release\moc_predefs.h.cbt">
+      <Filter>Generated Files</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <QtUic Include="MainWidget.ui">
+      <Filter>Form Files</Filter>
+    </QtUic>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resource\images\1.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\images\2.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\images\3.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\images\4.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\images\5.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\images\6.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <QtRcc Include="LMEngine.qrc">
+      <Filter>Resource Files</Filter>
+    </QtRcc>
+    <None Include="Resource\images\RecordButton_Start_bg.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\images\RecordButton_Stop_bg.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\models\dragon.obj">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\models\dragon_diffuse.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\models\dragon_normal.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\models\dragon_specular.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\shaders\fragment_rgb.frag">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\shaders\fragment_yuv.frag">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\images\ground.jpg">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\stickers\item_cracehat.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\stickers\item_foxsticker.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\stickers\item_sticker_blueglass.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\stickers\item_sticker_glass2.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\stickers\item_sticker_sunhat2.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\stickers\item_sticker_sunhat3.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\stickers\item_stickerdog.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\stickers\item_stickerpig.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\stickers\item_stickerrabit.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\models\monkey.obj">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\models\monkey_diffuse.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\models\monkey_normal.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\models\monkey_specular.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\shaders\objloader.frag">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\shaders\objloader.vert">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\images\rabit.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\images\sky_nx.jpg">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\images\sky_ny.jpg">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\images\sky_nz.jpg">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\images\sky_px.jpg">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\images\sky_py.jpg">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\images\sky_pz.jpg">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\shaders\skybox.frag">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\shaders\skybox.vert">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\models\tortoise.obj">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\models\tortoise_diffuse.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\models\tortoise_normal.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\models\tortoise_specular.png">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\shaders\vertex_rgb.vert">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resource\shaders\vertex_yuv.vert">
+      <Filter>Resource Files</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Common\DataDefine.h">
+      <Filter>Source\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\MsgQueue.h">
+      <Filter>Source\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="OpenGLWidget\SceneManger\Object\Model\GLModel.h">
+      <Filter>Source\Widget\OpenGLWidget\SceneManager\Object\Model</Filter>
+    </ClInclude>
+    <ClInclude Include="OpenGLWidget\SceneManger\Object\Model\Mesh\GLMesh.h">
+      <Filter>Source\Widget\OpenGLWidget\SceneManager\Object\Model\Mesh</Filter>
+    </ClInclude>
+    <ClInclude Include="OpenGLWidget\SceneManger\Object\SkyBox\GLSkyBox.h">
+      <Filter>Source\Widget\OpenGLWidget\SceneManager\Object\SkyBox</Filter>
+    </ClInclude>
+    <ClInclude Include="AVRecorder\AVRecorder.h">
+      <Filter>Source\Widget\AVRecorder</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\Camera\GLCamera.h">
+      <Filter>Source\Common\Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\ShaderProgram\GLShaderProgram.h">
+      <Filter>Source\Common\ShaderProgram</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
