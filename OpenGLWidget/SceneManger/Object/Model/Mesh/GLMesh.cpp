@@ -6,6 +6,9 @@ CGLMesh::CGLMesh(QObject* parent)
 	: QObject(parent)
 {
 	pShaderProg_ = new GLShaderProgram{ this };
+	model_ = glm::mat4(1.0f);
+	model_ = glm::translate(model_, glm::vec3(0.0f, 0.0f, -1.0f));
+	model_ = glm::scale(model_, glm::vec3(0.33, 0.33 * 4 / 3, 0.33));
 }
 
 CGLMesh::~CGLMesh()
@@ -19,8 +22,8 @@ GLuint CGLMesh::loadTexture(const char* filePath)
 	glGenTextures(1, &texture);
 	glBindTexture(GL_TEXTURE_2D, texture);
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -132,7 +135,12 @@ void CGLMesh::draw(const glm::mat4& view, const glm::mat4& projection, const glm
 	pShaderProg_->setVec3("viewPos", viewPos);
 
 	// ------------------------- ÉèÖÃMVP¾ØÕó -------------------------
-	pShaderProg_->setMatrix4fv("Model", 1, GL_FALSE, glm::value_ptr(model_));
+
+	glm::mat4 model = glm::mat4{1.0f};
+	//model = glm::translate(model, glm::vec3(0.0, 0.0, 1.0f));
+	//model_ = glm::scale(model_, glm::vec3(0.33 * scale, 0.33 * 4 / 3 * scale, 0.33));
+	//model = glm::scale(model, glm::vec3(0.33, 0.33, 0.33));
+	pShaderProg_->setMatrix4fv("Model", 1, GL_FALSE, glm::value_ptr(model));???
 	pShaderProg_->setMatrix4fv("View", 1, GL_FALSE, glm::value_ptr(view));
 	pShaderProg_->setMatrix4fv("Projection", 1, GL_FALSE, glm::value_ptr(projection));
 
@@ -145,8 +153,10 @@ void CGLMesh::move(QPointF pos, float scale)
 {
 	float x = 1.0f - pos.x() * 2.0 / 1920;
 	float y = 1.0f - pos.y() * 2.0 / 1080;
+	//qDebug() << "move pos: " << x << " " << y;
 
 	model_ = glm::mat4(1.0f);
-	model_ = glm::translate(model_, glm::vec3(x, y, -1.0f));
-	model_ = glm::scale(model_, glm::vec3(0.33 * scale, 0.33 * 4 / 3 * scale, 0.33));
+	model_ = glm::translate(model_, glm::vec3(x, y, 1.0f));
+	//model_ = glm::scale(model_, glm::vec3(0.33 * scale, 0.33 * 4 / 3 * scale, 0.33));
+	model_ = glm::scale(model_, glm::vec3(0.33, 0.33, 0.33));
 }

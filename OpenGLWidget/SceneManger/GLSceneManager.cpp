@@ -42,6 +42,6 @@ void GLSceneManager::moveFace(const QPoint& pos, const float& scale)
 
 	if (pFrame_)
 	{
-		pFrame_->move(pos, scale);
+		//pFrame_->move(pos, scale);
 	}
 }

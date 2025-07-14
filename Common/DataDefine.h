@@ -38,13 +38,26 @@ typedef struct  YUVBuffDef
 
 #pragma pack(pop)
 
+typedef struct vec3f
+{
+    float x;
+    float y;
+    float z;
+}vec3f;
+
+typedef struct vec2f
+{
+    float x;
+    float y;
+}vec2f;
+
 typedef struct VertexAttr
 {
-    glm::vec3 pos;
-    glm::vec2 uv;
-	glm::vec3 norm;
-	glm::vec3 tan;
-	glm::vec3 bitan;
+    vec3f pos;
+    vec2f uv;
+    vec3f norm;
+    vec3f tan;
+    vec3f bitan;
 
 }VertexAttr;
 

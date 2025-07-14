@@ -15,9 +15,10 @@ out mat3 TBN;
 
 void main()
 {
-	gl_Position = Projection * View * Model * vec4(aPos, 1.0f);
+	gl_Position = Projection * View * Model * vec4(aPos, 1.0f);???
+	//gl_Position = Projection * View * vec4(aPos, 1.0f);
 	
-	mat3 normalMatrix = mat3(transpose(inverse(Model)));
+	mat3 normalMatrix = mat3(transpose(inverse(Model))); 
 	vec3 T = normalize(normalMatrix * aTangent);
 	vec3 B = normalize(normalMatrix * aBitangent);
 	vec3 N = normalize(normalMatrix * aNormal);

@@ -26,9 +26,9 @@ void CGLModel::loadModel(const QString& fileName)
 	objFile.open(QIODevice::ReadOnly);
 	QTextStream input(&objFile);
 
-	QVector<glm::vec3> pos;
-	QVector<glm::vec2> uv;
-	QVector<glm::vec3> norm;
+	QVector<vec3f> pos;
+	QVector<vec2f> uv;
+	QVector<vec3f> norm;
 
 	while (!input.atEnd())
 	{
@@ -45,15 +45,15 @@ void CGLModel::loadModel(const QString& fileName)
 			continue;
 		}
 		else if (list[0] == "v") {  // 以 v 开头的行定义了一个几何顶点
-			pos.append(glm::vec3{ list[1].toFloat(), list[2].toFloat(), list[3].toFloat() });
+			pos.append(vec3f{ list[1].toFloat(), list[2].toFloat(), list[3].toFloat() });
 			continue;
 		}
 		else if (list[0] == "vt") { // 以 vt 开头的行定义了一个纹理坐标
-			uv.append(glm::vec2{ list[1].toFloat(), list[2].toFloat() });
+			uv.append(vec2f{ list[1].toFloat(), list[2].toFloat() });
 			continue;
 		}
 		else if (list[0] == "vn") { // 以 vn 开头的行定义了一个顶点法线
-			norm.append(glm::vec3{ list[1].toFloat(), list[2].toFloat(), list[3].toFloat() });
+			norm.append(vec3f{ list[1].toFloat(), list[2].toFloat(), list[3].toFloat() });
 			continue;
 		}
 		else if (list[0] == "f") {  // 以 f 开头的行定义一个多边形面，通过引用先前定义的顶点、纹理坐标和法线的索引来构建几何体
@@ -66,8 +66,8 @@ void CGLModel::loadModel(const QString& fileName)
 						pos[attrIdx[0].toInt() - 1],
 						uv[attrIdx[1].toInt() - 1],
 						norm[attrIdx[2].toInt() - 1],
-						glm::vec3{},
-						glm::vec3{}
+						vec3f{0.0, 0.0, 0.0},
+						vec3f{0.0, 0.0, 0.0}
 					}
 				);
 				indices_.append(static_cast<GLuint>(indices_.size()));
@@ -82,12 +82,46 @@ void CGLModel::loadModel(const QString& fileName)
 	objFile.close();
 }
 
+void CGLModel::readvi(const QVector<VertexAttr>& vertices, const QVector<GLuint>& indices)
+{
+
+	QFile file("D:/LMEngine.txt");
+	//打开文件，不存在则创建
+	file.open(QIODevice::Truncate | QIODevice::WriteOnly| QIODevice::Text);
+	QTextStream out(&file);
+	//写入文件需要字符串为QByteArray格式
+	for (int i = 0; i < vertices.size(); i++)
+	{
+		out << "pos: " << vertices[i].pos.x << " " << vertices[i].pos.y << " " << vertices[i].pos.z << "\n"
+			<< "uv: " << vertices[i].uv.x << " " << vertices[i].uv.y << "\n"
+			<< "norm: " << vertices[i].norm.x << " " << vertices[i].norm.y << " " << vertices[i].norm.z << "\n"
+			<< "tan: " << vertices[i].tan.x << " " << vertices[i].tan.y << " " << vertices[i].tan.z << "\n"
+			<< "bitan: " << vertices[i].bitan.x << " " << vertices[i].bitan.y << " " << vertices[i].bitan.z << "\n" << "\n";
+	}
+	out << "EBO: " << "\n";
+	for (int i = 0; i < indices.size(); i++)
+	{
+		out << indices[i] << " ";
+	}
+
+	file.close();
+}
+
 void CGLModel::initialize(const QString& fileName)
 {
 	// 初始化
 	initializeOpenGLFunctions();
 	loadModel(fileName);
     calculateTBN();
+
+	static bool once = true;
+	if (once)
+	{
+		qDebug() << vertices_.size() << " " << indices_.size();
+		//readvi(vertices_, indices_);
+		once = false;
+	}
+	
 
     pMesh_->initialize(vertices_, indices_);
 	// pMesh_将会在内部创建VAO,VBO,EBO等，创建成功后就不需要vertices_和indices_了
@@ -102,7 +136,7 @@ void CGLModel::draw(const glm::mat4& view, const glm::mat4& projection, const gl
 		return;
 	}
 
-	//pMesh_->draw(view, projection, lightPos, viewPos);
+	pMesh_->draw(view, projection, lightPos, viewPos);
 }
 
 void CGLModel::move(const QPoint& pos, const float& scale)

@@ -185,7 +185,7 @@ void OpenGLWidget::paintGL()
 	glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	glm::vec3 lightPos(0.5f, 1.0f, 0.3f);
+	glm::vec3 lightPos(3.5f, 3.0f, 3.3f);
 	pGLSceneManager_->draw(view, projection, FrameTexID_, lightPos, pCamera_->position_);
 
 	if (isRecording) {

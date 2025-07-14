@@ -26,7 +26,7 @@ public:
 private:
     void loadModel(const QString& filePath);
     void calculateTBN();
-
+    void readvi(const QVector<VertexAttr>& vertices, const QVector<GLuint>& indices);
 
 private:
     CGLMesh* pMesh_ = nullptr;
