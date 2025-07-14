@@ -56,3 +56,4 @@ compile_commands.json
 #msvc
 ./debug
 **/.vs
+./test.png
