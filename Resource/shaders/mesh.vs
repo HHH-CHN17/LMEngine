@@ -1,38 +1,28 @@
-#version 120
-attribute  vec4 a_position;
-attribute  vec2 a_texturCoord;
-attribute  vec3 a_normal;
-attribute  vec3 a_tangent;
-attribute  vec3 a_bitangent;
+#version 460 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec2 aTexCoords;
+layout (location = 2) in vec3 aNormal;
+layout (location = 3) in vec3 aTangent;
+layout (location = 4) in vec3 aBitangent;
 
-uniform  mat4 u_projectionMatrix;
-uniform  mat4 u_viewMatrix;
-uniform mat4 u_modelMatrix;
+uniform mat4 Model;
+uniform mat4 View;
+uniform mat4 Projection;
 
-varying  vec4 vary_pos;
-varying  vec2 vary_texCoord;
-varying  mat3 vary_tbnMatrix;
+out vec3 FragPos; // 此处的片段坐标是世界空间下的片段坐标
+out vec2 TexCoords;
+out mat3 TBN;
 
-
-void main(void)
+void main()
 {
-    mat4 mv_matrix = u_viewMatrix * u_modelMatrix;
-    gl_Position = u_projectionMatrix * mv_matrix * a_position;
-
-    vary_texCoord = a_texturCoord;
-
-    vary_pos = u_modelMatrix * a_position;
-
-//    vec3 normal  = normalize(mat3(gl_ModelViewMatrixInverseTranspose) * a_normal);
-//    vec3 tangent = normalize(mat3(gl_ModelViewMatrixInverseTranspose) * a_tangent);
-//    tangent = normalize(tangent - dot(tangent, normal) * normal);
-//    vec3 bitangent = cross(normal, tangent);
-//    vary_tbnMatrix = mat3(tangent, bitangent, normal);
-
-    //mat3 normalMatrix = transpose(inverse(mat3(model)));
-    vec3 normal = normalize(mat3(gl_ModelViewMatrixInverseTranspose) * a_normal);
-    vec3 tangent = normalize(mat3(gl_ModelViewMatrixInverseTranspose) * a_tangent);
-    vec3 bitangent = normalize(mat3(gl_ModelViewMatrixInverseTranspose) * a_bitangent);
-    vary_tbnMatrix = mat3(tangent, bitangent, normal);
-
-}
+	gl_Position = Projection * View * Model * vec4(aPos, 1.0f);
+	
+	mat3 normalMatrix = mat3(transpose(inverse(Model)));
+	vec3 T = normalize(normalMatrix * aTangent);
+	vec3 B = normalize(normalMatrix * aBitangent);
+	vec3 N = normalize(normalMatrix * aNormal);
+	
+	FragPos = vec3(Model * vec4(aPos, 1.0f));
+	TexCoords = aTexCoords;
+	TBN = mat3(T, B, N);
+};

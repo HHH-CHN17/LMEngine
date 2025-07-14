@@ -25,10 +25,10 @@ void GLSceneManager::initialize()
 	pSkyBox_->initialize();
 }
 
-void GLSceneManager::draw(const glm::mat4& view, const glm::mat4& projection, const GLuint& FrameTexID)
+void GLSceneManager::draw(const glm::mat4& view, const glm::mat4& projection, const GLuint& FrameTexID, const glm::vec3& lightPos, const glm::vec3& viewPos)
 {
 	pFrame_->draw(view, projection, FrameTexID);
-	pModel_->draw(view, projection);
+	pModel_->draw(view, projection, lightPos, viewPos);
 	// Ìì¿ÕºÐ×îºó»­
 	pSkyBox_->draw(view, projection);
 }

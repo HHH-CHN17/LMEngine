@@ -245,53 +245,8 @@
     </QtUic>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Resource\images\1.png" />
-    <None Include="Resource\images\2.png" />
-    <None Include="Resource\images\3.png" />
-    <None Include="Resource\images\4.png" />
-    <None Include="Resource\images\5.png" />
-    <None Include="Resource\images\6.png" />
     <QtRcc Include="LMEngine.qrc">
     </QtRcc>
-    <None Include="Resource\images\RecordButton_Start_bg.png" />
-    <None Include="Resource\images\RecordButton_Stop_bg.png" />
-    <None Include="Resource\models\dragon.obj" />
-    <None Include="Resource\models\dragon_diffuse.png" />
-    <None Include="Resource\models\dragon_normal.png" />
-    <None Include="Resource\models\dragon_specular.png" />
-    <None Include="Resource\shaders\fragment_rgb.frag" />
-    <None Include="Resource\shaders\fragment_yuv.frag" />
-    <None Include="Resource\images\ground.jpg" />
-    <None Include="Resource\stickers\item_cracehat.png" />
-    <None Include="Resource\stickers\item_foxsticker.png" />
-    <None Include="Resource\stickers\item_sticker_blueglass.png" />
-    <None Include="Resource\stickers\item_sticker_glass2.png" />
-    <None Include="Resource\stickers\item_sticker_sunhat2.png" />
-    <None Include="Resource\stickers\item_sticker_sunhat3.png" />
-    <None Include="Resource\stickers\item_stickerdog.png" />
-    <None Include="Resource\stickers\item_stickerpig.png" />
-    <None Include="Resource\stickers\item_stickerrabit.png" />
-    <None Include="Resource\models\monkey.obj" />
-    <None Include="Resource\models\monkey_diffuse.png" />
-    <None Include="Resource\models\monkey_normal.png" />
-    <None Include="Resource\models\monkey_specular.png" />
-    <None Include="Resource\shaders\objloader.frag" />
-    <None Include="Resource\shaders\objloader.vert" />
-    <None Include="Resource\images\rabit.png" />
-    <None Include="Resource\images\sky_nx.jpg" />
-    <None Include="Resource\images\sky_ny.jpg" />
-    <None Include="Resource\images\sky_nz.jpg" />
-    <None Include="Resource\images\sky_px.jpg" />
-    <None Include="Resource\images\sky_py.jpg" />
-    <None Include="Resource\images\sky_pz.jpg" />
-    <None Include="Resource\shaders\skybox.frag" />
-    <None Include="Resource\shaders\skybox.vert" />
-    <None Include="Resource\models\tortoise.obj" />
-    <None Include="Resource\models\tortoise_diffuse.png" />
-    <None Include="Resource\models\tortoise_normal.png" />
-    <None Include="Resource\models\tortoise_specular.png" />
-    <None Include="Resource\shaders\vertex_rgb.vert" />
-    <None Include="Resource\shaders\vertex_yuv.vert" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AVRecorder\AVRecorder.h" />

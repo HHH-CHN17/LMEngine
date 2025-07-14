@@ -19,7 +19,7 @@ public:
 
 public:
 	void initialize();
-	void draw(const glm::mat4& view, const glm::mat4& projection, const GLuint& FrameTexID);
+	void draw(const glm::mat4& view, const glm::mat4& projection, const GLuint& FrameTexID, const glm::vec3& lightPos, const glm::vec3& viewPos);
 	void moveFace(const QPoint& pos, const float& scale);
 
 private:

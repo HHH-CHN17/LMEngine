@@ -35,5 +35,6 @@ public:
 	void set4f(const std::string& name, float value1, float value2, float value3, float value4);
 	void set2f(const std::string& name, float value1, float value2);
 	void setMatrix4fv(const std::string& name, GLsizei count, GLboolean transpose, const GLfloat* value);
+	void setVec3(const std::string& name, const glm::vec3& value);
 };
 

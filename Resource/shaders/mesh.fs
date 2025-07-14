@@ -1,60 +1,58 @@
-#version 120
+#version 460 core
+out vec4 FragColor;
 
-
-struct Light
+// 本节中引入了法线贴图，所以计算用的法线坐标并非VBO中传入的法线坐标，而是法线贴图中的法线坐标
+struct Material 
 {
-    vec3 m_pos;
-    vec3 m_ambient;
-    vec3 m_diffuse;
-    vec3 m_specular;
-
-    float m_c;
-    float m_l;
-    float m_q;
+	sampler2D	diffuse;		// 材质的漫反射贴图，由于环境光颜色在几乎所有情况下都等于漫反射颜色，所以移除了amibent
+	sampler2D	specular;		// 材质的镜面反射贴图
+	sampler2D	normal;			// 材质的法线贴图
+	float 		shininess;		// 材质的高光的散射/半径
 };
 
-uniform Light myLight;
+struct Light {
+    vec3 position;
 
-uniform sampler2D   texture_diffuse;
-uniform sampler2D   texture_normal;
-uniform sampler2D   texture_specular;
+    vec3 ambient;		// 光源的环境光强度（光在环境光的条件下，颜色不一定是vec3(1.0f)，其他同理）
+    vec3 diffuse;       // 光源的漫反射强度
+    vec3 specular;      // 光源的镜面反射强度
+};
 
-uniform float       m_shiness;
+uniform Material material;
+uniform Light light;
+uniform vec3 viewPos;
 
-uniform vec3       u_viewPos;
+in vec3 FragPos;
+in vec2 TexCoords;
+in mat3 TBN;
 
-varying vec4 vary_pos;
-varying vec2 vary_texCoord;
-varying  mat3 vary_tbnMatrix;
-
-void main(void)
+void main()
 {
-    vec3 normal = texture2D(texture_normal,vary_texCoord).rgb;
-    normal = normalize(normal * 2.0 - 1.0);
-    normal = normalize(vary_tbnMatrix * normal);
+	// 法向量
+	vec3 normal = texture(material.normal, TexCoords).rgb;
+	normal = normalize(normal * 2.0 - 1.0);		// 法线坐标在rgb中值域为[0, 1], 需要转换为NDC，即[-1, 1]
+	normal = normalize(TBN * normal); 
+	
+	// 纹理颜色
+	vec3 diffuseColor = texture(material.diffuse, TexCoords).rgb;
+	vec3 specularColor = texture(material.specular, TexCoords).rgb;
+	
+	// 计算环境光
+    vec3 ambientLight = diffuseColor * light.ambient;
+	
+	// 计算漫反射光
+	vec3 lightDir = normalize(light.position - FragPos);				// 注意这里算出来的方向与实际的光源方向相反
+	float deltaDiffuse = max(dot(lightDir, normal), 0.0f);
+	vec3 diffuseLight = diffuseColor * light.diffuse * deltaDiffuse;
+	
+	// 计算镜面反射光
+	vec3 viewDir = normalize(viewPos - FragPos);						// 注意这里算出来的方向与实际的观察方向相反
+	vec3 reflectDir = reflect(-lightDir, normal);
+	vec3 halfwayDir = normalize(lightDir + viewDir);  
+	float deltaSpecular = pow(max(dot(normal, halfwayDir), 0.0f), material.shininess);
+	vec3 specularLight = specularColor * light.specular * deltaSpecular;
 
-    float dist = length(myLight.m_pos - vary_pos.xyz);
-
-    float attenuation = 1.0f / (myLight.m_c + myLight.m_l * dist + myLight.m_q *dist * dist);
-
-    //ambient
-    vec3 ambient = myLight.m_ambient * vec3(texture2D(texture_diffuse , vary_texCoord).rgb);
-    //diffuse
-    vec3 lightDir = normalize(myLight.m_pos - vary_pos.xyz);
-    float diff = max(dot(normal , lightDir) , 0.0f);
-    vec3 diffuse = myLight.m_diffuse * diff * vec3(texture2D(texture_diffuse , vary_texCoord).rgb);
-
-    //mirror reflect
-    float specular_strength = 0.5;
-    vec3 viewDir = normalize(u_viewPos - vary_pos.xyz);
-    vec3 reflectDir = reflect(-lightDir , normal);
-
-    float spec =  pow(max(dot(viewDir , reflectDir) , 0.0f) , m_shiness);
-
-    vec3 sepcular = specular_strength* myLight.m_specular * spec;
-    //vec3 sepcular = specular_strength* myLight.m_specular * spec * vec3(texture2D(texture_specular , vary_texCoord).rgb);
-
-    vec3 result = ambient  + diffuse + sepcular ;
-    gl_FragColor = vec4(result,1.0f) ;
-
-}
+    vec3 result = ambientLight + diffuseLight + specularLight;
+    //vec3 result = diffuseColor;
+    FragColor = vec4(result, 1.0);
+};

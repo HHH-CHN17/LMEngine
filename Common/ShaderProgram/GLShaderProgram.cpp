@@ -125,3 +125,8 @@ void GLShaderProgram::setMatrix4fv(const std::string& name, GLsizei count, GLboo
     GLint loc = glGetUniformLocation(ProgramID_, name.c_str());
     glUniformMatrix4fv(loc, count, transpose, value);
 }
+
+void GLShaderProgram::setVec3(const std::string& name, const glm::vec3& value)
+{
+    glUniform3fv(glGetUniformLocation(ProgramID_, name.c_str()), 1, &value[0]);
+}

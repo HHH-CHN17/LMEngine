@@ -40,10 +40,12 @@ typedef struct  YUVBuffDef
 
 typedef struct VertexAttr
 {
-    glm::vec3 pos{};
-    glm::vec2 uv{};
-	glm::vec3 norm{};
-	glm::vec3 tan{};
-	glm::vec3 bitan{};
+    glm::vec3 pos;
+    glm::vec2 uv;
+	glm::vec3 norm;
+	glm::vec3 tan;
+	glm::vec3 bitan;
 
 }VertexAttr;
+
+static_assert(std::is_pod_v<VertexAttr>, "VertexAttr is not POD!!");
