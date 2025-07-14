@@ -29,7 +29,7 @@ Makefile*
 *build-*
 *.qm
 *.prl
-./build
+**/build
 
 # Qt unit tests
 target_wrapper.*
@@ -53,6 +53,6 @@ compile_commands.json
 *_qmlcache.qrc
 
 #msvc
-./debug
+**/debug
 **/.vs
 ./test.png
