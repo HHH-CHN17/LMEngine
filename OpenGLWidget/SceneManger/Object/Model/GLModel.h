@@ -20,7 +20,7 @@ public:
     virtual ~CGLModel();
 
     void initialize(const QString& fileName);
-    void draw(const glm::mat4& view, const glm::mat4& projection);
+    void draw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& lightPos, const glm::vec3& viewPos);
     void move(const QPoint& pos, const float& scale);
 
 private:
@@ -32,6 +32,7 @@ private:
     CGLMesh* pMesh_ = nullptr;
 
     // vertices[i]和indices[i]分别表示 一个顶点 的顶点属性（VBO）和索引（EBO）
+    // QVector<T> is one of Qt's generic container classes. It stores its items in adjacent memory locations and provides fast index-based access.
     QVector<VertexAttr> vertices_{};
     QVector<GLuint> indices_{};
 };

@@ -86,12 +86,8 @@ void CGLModel::initialize(const QString& fileName)
 {
 	// 初始化
 	initializeOpenGLFunctions();
-
 	loadModel(fileName);
-
     calculateTBN();
-
-	qDebug() << "is POD: " << std::is_pod_v<VertexAttr>;
 
     pMesh_->initialize(vertices_, indices_);
 	// pMesh_将会在内部创建VAO,VBO,EBO等，创建成功后就不需要vertices_和indices_了
@@ -99,14 +95,14 @@ void CGLModel::initialize(const QString& fileName)
     indices_.clear();
 }
 
-void CGLModel::draw(const glm::mat4& view, const glm::mat4& projection)
+void CGLModel::draw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& lightPos, const glm::vec3& viewPos)
 {
 	if (!pMesh_) {
 		qDebug() << "Mesh is not initialized.";
 		return;
 	}
 
-	pMesh_->draw(view, projection);
+	//pMesh_->draw(view, projection, lightPos, viewPos);
 }
 
 void CGLModel::move(const QPoint& pos, const float& scale)

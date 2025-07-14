@@ -20,7 +20,7 @@ public:
 
 public:
     void initialize(const QVector<VertexAttr>& vertices, const QVector<GLuint>& indices);
-    void draw(const glm::mat4& view, const glm::mat4& projection);
+    void draw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& lightPos, const glm::vec3& viewPos);
     void move(QPointF pos, float scale);
 
 private:
@@ -32,13 +32,11 @@ private:
     GLuint VAO_ = 0;
 	GLuint VBO_ = 0;
 	GLuint EBO_ = 0;
+	GLuint eboSize_ = 0;
     GLuint normalTexID_ = 0;
     GLuint diffuseTexID_ = 0;
 	GLuint specularTexID_ = 0;
 
-    GLdouble   m_Objx = 0;
-    GLdouble   m_Objy = 0;
-    GLdouble   m_Objz = -1;
-    float      m_ObjScale = 1.0;
+    glm::mat4 model_{ 1.0f };
 
 };
