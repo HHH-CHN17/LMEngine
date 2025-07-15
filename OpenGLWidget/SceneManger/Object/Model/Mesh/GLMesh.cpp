@@ -22,17 +22,16 @@ GLuint CGLMesh::loadTexture(const char* filePath)
 	glGenTextures(1, &texture);
 	glBindTexture(GL_TEXTURE_2D, texture);
 
-	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 	QImage imgContainer{ filePath };
 	QImage rgba1 = imgContainer.rgbSwapped(); //qimage加载的颜色通道顺序和opengl显示的颜色通道顺序不一致,调换R通道和B通道，且会自动添加一个alpha通道
 	// 本节的两张贴图均不需要反转
-	//rgba1 = rgba1.mirrored();	// qimage的原点在左上角，UV坐标系的原点在左下角
+	rgba1 = rgba1.mirrored();	// qimage的原点在左上角，UV坐标系的原点在左下角
 
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rgba1.width(), rgba1.height(),
 		0, GL_RGBA, GL_UNSIGNED_BYTE, rgba1.bits());
@@ -71,12 +70,12 @@ void CGLMesh::initialize(const QVector<VertexAttr>& vertices, const QVector<GLui
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(VertexAttr), (void*)0);
 	glEnableVertexAttribArray(0);
 
-	// 设置uv坐标
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(VertexAttr), (void*)(3 * sizeof(float)));
+	// 设置法线坐标
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(VertexAttr), (void*)(3 * sizeof(float)));
 	glEnableVertexAttribArray(1);
 
-	// 设置法线坐标
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(VertexAttr), (void*)(5 * sizeof(float)));
+	// 设置uv坐标
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(VertexAttr), (void*)(6 * sizeof(float)));
 	glEnableVertexAttribArray(2);
 
 	// 设置tangent坐标
@@ -139,11 +138,7 @@ void CGLMesh::draw(const glm::mat4& view, const glm::mat4& projection, const glm
 
 	// ------------------------- 设置MVP矩阵 -------------------------
 
-	glm::mat4 model = glm::mat4{1.0f};
-	//model = glm::translate(model, glm::vec3(0.0, 0.0, 1.0f));
-	//model_ = glm::scale(model_, glm::vec3(0.33 * scale, 0.33 * 4 / 3 * scale, 0.33));
-	//model = glm::scale(model, glm::vec3(0.33, 0.33, 0.33));
-    pShaderProg_->setMatrix4fv("Model", 1, GL_FALSE, glm::value_ptr(model));
+    pShaderProg_->setMatrix4fv("Model", 1, GL_FALSE, glm::value_ptr(model_));
 	pShaderProg_->setMatrix4fv("View", 1, GL_FALSE, glm::value_ptr(view));
 	pShaderProg_->setMatrix4fv("Projection", 1, GL_FALSE, glm::value_ptr(projection));
 
@@ -158,9 +153,10 @@ void CGLMesh::move(QPointF pos, float scale)
 	float x = 1.0f - pos.x() * 2.0 / 1920;
 	float y = 1.0f - pos.y() * 2.0 / 1080;
 	//qDebug() << "move pos: " << x << " " << y;
+	scale = std::max(scale, 2.0f);
 
 	model_ = glm::mat4(1.0f);
-	model_ = glm::translate(model_, glm::vec3(x, y, 1.0f));
-	//model_ = glm::scale(model_, glm::vec3(0.33 * scale, 0.33 * 4 / 3 * scale, 0.33));
-	model_ = glm::scale(model_, glm::vec3(0.33, 0.33, 0.33));
+	model_ = glm::translate(model_, glm::vec3(x, y, -0.0f));
+	model_ = glm::scale(model_, glm::vec3(0.1 * scale, 0.1 * 4 / 3 * scale, 0.1));
+	//model_ = glm::scale(model_, glm::vec3(0.33, 0.33, 0.33));
 }

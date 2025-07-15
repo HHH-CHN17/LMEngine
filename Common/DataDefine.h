@@ -54,8 +54,8 @@ typedef struct vec2f
 typedef struct VertexAttr
 {
     vec3f pos;
-    vec2f uv;
     vec3f norm;
+    vec2f uv;
     vec3f tan;
     vec3f bitan;
 

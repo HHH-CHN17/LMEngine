@@ -34,6 +34,8 @@
         <file>Resource/shaders/frame.vs</file>
         <file>Resource/shaders/mesh.fs</file>
         <file>Resource/shaders/mesh.vs</file>
+        <file>Resource/shaders/sun.fs</file>
+        <file>Resource/shaders/sun.vs</file>
     </qresource>
     <qresource prefix="/stickers">
         <file>Resource/stickers/item_cracehat.png</file>

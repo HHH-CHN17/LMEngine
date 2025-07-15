@@ -215,6 +215,7 @@
     <ClCompile Include="OpenGLWidget\SceneManger\Object\Model\GLModel.cpp" />
     <ClCompile Include="OpenGLWidget\SceneManger\Object\Model\Mesh\GLMesh.cpp" />
     <ClCompile Include="OpenGLWidget\SceneManger\Object\SkyBox\GLSkyBox.cpp" />
+    <ClCompile Include="OpenGLWidget\SceneManger\Object\Sun\GLSun.cpp" />
     <ClCompile Include="OpenGLWidget\VideoCaptureThread\VideoCaptureThread.cpp" />
     <ClCompile Include="OpenGLWidget\VideoCaptureThread\YUVDraw\GLYuvDraw.cpp" />
   </ItemGroup>
@@ -254,6 +255,7 @@
     <ClInclude Include="Common\MsgQueue.h" />
     <ClInclude Include="Common\ShaderProgram\GLShaderProgram.h" />
     <ClInclude Include="Common\DataDefine.h" />
+    <QtMoc Include="OpenGLWidget\SceneManger\Object\Sun\GLSun.h" />
     <QtMoc Include="OpenGLWidget\SceneManger\Object\Frame\GLFrame.h" />
     <ClInclude Include="OpenGLWidget\SceneManger\Object\Model\GLModel.h" />
     <ClInclude Include="OpenGLWidget\SceneManger\Object\Model\Mesh\GLMesh.h" />

@@ -64,8 +64,8 @@ void CGLModel::loadModel(const QString& fileName)
 				vertices_.append(
 					VertexAttr{
 						pos[attrIdx[0].toInt() - 1],
-						uv[attrIdx[1].toInt() - 1],
 						norm[attrIdx[2].toInt() - 1],
+						uv[attrIdx[1].toInt() - 1],
 						vec3f{0.0, 0.0, 0.0},
 						vec3f{0.0, 0.0, 0.0}
 					}
