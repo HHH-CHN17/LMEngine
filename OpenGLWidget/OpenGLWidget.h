@@ -49,9 +49,15 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
 
 private:
+    // initializeGL()中使用
     void initOffScreenEnv();
     void initFrameBuffer();
-    void adjustFBO();
+    void initPBOs();
+    // resizeGL(int w, int h)中使用
+    void reallocFrameBuffer(const int& w, const int& h);
+    void reallocPBOs(const int& w, const int& h);
+    void adjustViewPort(const int& w, const int& h);
+    // 记录视频
     void recordAV();
 
 private:
@@ -88,6 +94,9 @@ private:
     GLuint planeRBO_ = 0;
 
     GLShaderProgram* pMainShaderProg_ = nullptr;
+
+    // ------------------------- 渲染到FBO的texture上的所需数据 -------------------------
+    GLuint PBOIds_[0] = { 0, 0 };
 
     // ------------------------- 渲染到FBO的texture上的所需数据 -------------------------
     GLSceneManager* pGLSceneManager_ = nullptr;

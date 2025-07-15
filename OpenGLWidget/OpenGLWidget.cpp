@@ -76,8 +76,10 @@ void OpenGLWidget::initializeGL()
 	pMainShaderProg_->use();
 	// 因为我们将纹理附件附加到了帧缓冲，所有的渲染指令将会写入到这个纹理中，所以我们需要指定纹理单元
 	pMainShaderProg_->set1i("mainTexture", 0);
+	pMainShaderProg_->unuse();
 
 	initFrameBuffer();
+	initPBOs();
 
 	lastTime_ = QDateTime::currentDateTime();
 }
@@ -156,7 +158,21 @@ void OpenGLWidget::initFrameBuffer()
 	// 将帧缓冲对象绑定至默认缓冲区，即解绑当前帧缓冲对象
 	glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
 
-    planeFBO_ = FBO;
+}
+
+void OpenGLWidget::initPBOs()
+{
+	// 2. 创建 2 个像素缓冲区对象，程序退出时需要删除它们。
+	// 2.1 使用nullptr调用 glBufferData () 仅预留内存空间。
+	glGenBuffers(2, PBOIds_);
+
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, PBOIds_[0]);
+	glBufferData(GL_PIXEL_PACK_BUFFER, width() * height() * 4, nullptr, GL_STREAM_READ);
+
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, PBOIds_[1]);
+	glBufferData(GL_PIXEL_PACK_BUFFER, width() * height() * 4, nullptr, GL_STREAM_READ);
+
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 }
 
 void OpenGLWidget::paintGL()
@@ -189,7 +205,7 @@ void OpenGLWidget::paintGL()
 	pGLSceneManager_->draw(view, projection, FrameTexID_, lightPos, pCamera_->position_);
 
 	if (isRecording) {
-        //recordAV();
+        recordAV();
 	}
 
 	// ------------------------- 当前屏幕渲染（将离屏渲染的纹理图像渲染到当前屏幕上） -------------------------
@@ -203,27 +219,35 @@ void OpenGLWidget::paintGL()
 	glBindTexture(GL_TEXTURE_2D, planeTexID_);
 	//glBindTexture(GL_TEXTURE_2D, FrameTexID_);
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+	pMainShaderProg_->unuse();
 }
 
-void OpenGLWidget::adjustFBO()
+void OpenGLWidget::reallocFrameBuffer(const int& w, const int& h)
+{
+	glBindTexture(GL_TEXTURE_2D, planeTexID_);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glBindRenderbuffer(GL_RENDERBUFFER, planeRBO_);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+}
+
+void OpenGLWidget::reallocPBOs(const int& w, const int& h)
+{
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, PBOIds_[0]);
+	glBufferData(GL_PIXEL_PACK_BUFFER, w * h * 4, nullptr, GL_STREAM_READ);
+
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, PBOIds_[1]);
+	glBufferData(GL_PIXEL_PACK_BUFFER, w * h * 4, nullptr, GL_STREAM_READ);
+
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+}
+
+void OpenGLWidget::adjustViewPort(const int& w, const int& h)
 {
 	int width_ = width();
 	int height_ = height();
-	static int org_wh = width_ * height_;
-
-	// 1. 窗口大小改变后，记得更新texture和rbo大小，否则glDrawElements的时候，texture的空间不够
-    if (org_wh != width_ * height_)
-	{
-		qDebug() << width_ << " " << height_;
-		glBindTexture(GL_TEXTURE_2D, planeTexID_);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width_, height_, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-		glBindTexture(GL_TEXTURE_2D, 0);
-
-		glBindRenderbuffer(GL_RENDERBUFFER, planeRBO_);
-		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width_, height_);
-		glBindRenderbuffer(GL_RENDERBUFFER, 0);
-	}
-	org_wh = width() * height();
 
 	static int viewportX = 0;
 	static int viewportY = 0;
@@ -251,7 +275,17 @@ void OpenGLWidget::adjustFBO()
 void OpenGLWidget::resizeGL(int w, int h)
 {
 	// 对于离屏渲染而言，每次绘图都需要根据窗口大小动态调整FBO中的texture和rbo的大小
-	adjustFBO();
+	static int org_wh = w * h;
+
+	// 窗口大小改变后，记得更新texture和rbo大小，否则glDrawElements的时候，texture的空间不够
+	if (org_wh != w * h)
+	{
+		qDebug() << w << " " << h;
+		reallocFrameBuffer(w, h);
+		reallocPBOs(w, h);
+		adjustViewPort(w, h);
+	}
+	org_wh = w * h;
 }
 
 void OpenGLWidget::startRecord()
@@ -259,6 +293,58 @@ void OpenGLWidget::startRecord()
 	// initialize，随后在paintGL中记录
 
 	isRecording = true;
+}
+
+void OpenGLWidget::recordAV()
+{
+	static int shift = 0;
+	static int index = 0;               // pbo index to alternate every frame
+	int nextIndex = 1;                  // pbo index used for next frame
+
+	// brightness shift amount
+	++shift;
+	shift %= 200;
+
+
+	/*********************************** USES PBO (Streaming Texture Uploads 流式纹理更新) ***********************************/
+
+	// 4. PBOIds_[idx_] 负责将像素数据从PBO拷贝到纹理对象
+	// 4.1 PBOIds_[nextidx] 负责更新像素数据
+	index = (index + 1) % 2;
+	int nextidx = (index + 1) % 2;
+
+	// https://learn.microsoft.com/zh-cn/windows/win32/opengl/glreadbuffer
+	// https://blog.csdn.net/heyuchang666/article/details/69523417
+	// 5. 将颜色缓冲区指定为后续 glReadPixels 和 glCopyPixels 命令的源
+	glReadBuffer(GL_FRONT);
+
+	// ------------------------- pack PBO -------------------------
+	// 6. 当使用 glBindBuffer() 将PBO绑定到GL_PIXEL_PACK_BUFFER上后，
+	// 后续所有的pack操作：如 glReadPixels(), glGetTexImage() 等函数
+	// 会将像素数据从 帧缓冲区 或者 纹理图像 传输到 PBO对应的像素缓冲区
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, PBOIds_[index]);
+	//glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, IMAGE_WIDTH, IMAGE_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+	glReadPixels(0, 0, geometry().width(), geometry().height(), GL_RGBA, GL_UNSIGNED_BYTE, 0);
+
+	// ------------------------- update PBO -------------------------
+	// 7. 更换绑定的PBO，用于更新像素数据
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, PBOIds_[nextidx]);
+	// 8.1 显然此处不能像unpack操作一样给清空缓存了，因为我们要读数据
+	//glBufferData(GL_PIXEL_PACK_BUFFER, DATA_SIZE, 0, GL_STREAM_DRAW);
+	//ptr表示GPU上的PBO在内存空间的映射地址，我们操作ptr，实际上是直接操作的GPU中的PBO
+	GLubyte* ptr = static_cast<GLubyte*>(glMapBufferRange(GL_PIXEL_PACK_BUFFER,
+		0, DATA_SIZE, GL_MAP_READ_BIT));
+	if (ptr)
+	{
+		// 9. 直接在映射的像素缓冲区上修改像素数据
+		//add(ptr, width(), height(), shift, colorBuffer_);
+		// 10.1 用完记得释放
+		glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+	}
+
+	// 11. 从第4点可以看出，使用完后记得释放绑定
+	// glBindBuffer()一旦绑定到 0，所有像素操作就会以常规方式运行。
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 }
 
 void OpenGLWidget::stopRecord()
