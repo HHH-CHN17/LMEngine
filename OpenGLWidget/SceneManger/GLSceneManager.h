@@ -9,6 +9,7 @@
 #include "OpenGLWidget/SceneManger/Object/Frame/GLFrame.h"
 #include "OpenGLWidget/SceneManger/Object/Model/GLModel.h"
 #include "OpenGLWidget/SceneManger/Object/SkyBox/GLSkyBox.h"
+#include "OpenGLWidget/SceneManger/Object/Sun/GLSun.h"
 
 class GLSceneManager : public QObject, public QOpenGLExtraFunctions
 {
@@ -25,6 +26,7 @@ public:
 private:
 	CGLSkybox* pSkyBox_ = nullptr;
 	CGLFrame* pFrame_ = nullptr;
+	CGLSun* pSun_ = nullptr;
 	CGLModel* pModel_ = nullptr;
 };
 
