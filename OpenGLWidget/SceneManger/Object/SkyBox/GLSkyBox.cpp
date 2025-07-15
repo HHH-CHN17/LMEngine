@@ -53,6 +53,9 @@ void CGLSkybox::initialize()
 	};
 	skyBoxTexID_ = loadskyBoxTexture(texList);
 
+	pShaderProg_->use();
+	pShaderProg_->set1i("skybox", 0);	// 绑定纹理单元0
+	pShaderProg_->unuse();
 
 	VAO_ = VAO;
 	VBO_ = VBO;
@@ -60,9 +63,9 @@ void CGLSkybox::initialize()
 
 void CGLSkybox::draw(const glm::mat4& view, const glm::mat4& projection)
 {
+	pShaderProg_->use();
 	glDepthFunc(GL_LEQUAL);  // change depth function so depth test passes when values are equal to depth buffer's content
 	
-	pShaderProg_->use();
 	glm::mat4 skyBoxView = glm::mat4(glm::mat3(view)); // remove translation from the view matrix
 	pShaderProg_->setMatrix4fv("view", 1, GL_FALSE, glm::value_ptr(skyBoxView));
 	pShaderProg_->setMatrix4fv("projection", 1, GL_FALSE, glm::value_ptr(projection));
@@ -75,6 +78,7 @@ void CGLSkybox::draw(const glm::mat4& view, const glm::mat4& projection)
 	glBindVertexArray(0);
 
 	glDepthFunc(GL_LESS); // set depth function back to default
+	pShaderProg_->unuse();
 }
 
 GLuint CGLSkybox::loadskyBoxTexture(QStringList& fileList)

@@ -22,10 +22,11 @@ GLuint CGLMesh::loadTexture(const char* filePath)
 	glGenTextures(1, &texture);
 	glBindTexture(GL_TEXTURE_2D, texture);
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 	QImage imgContainer{ filePath };
@@ -103,6 +104,7 @@ void CGLMesh::initialize(const QVector<VertexAttr>& vertices, const QVector<GLui
 	pShaderProg_->set1i("material.diffuse", 0);
 	pShaderProg_->set1i("material.specular", 1);
 	pShaderProg_->set1i("material.normal", 2);
+	pShaderProg_->unuse();
 
 	VAO_ = VAO;
 	VBO_ = VBO;
@@ -112,6 +114,7 @@ void CGLMesh::initialize(const QVector<VertexAttr>& vertices, const QVector<GLui
 
 void CGLMesh::draw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& lightPos, const glm::vec3& viewPos)
 {
+	pShaderProg_->use();
 	glBindVertexArray(VAO_);
 	// ------------------------- 设置物体材质信息 -------------------------
 	// 将漫反射texture传给0号采样器
@@ -140,13 +143,14 @@ void CGLMesh::draw(const glm::mat4& view, const glm::mat4& projection, const glm
 	//model = glm::translate(model, glm::vec3(0.0, 0.0, 1.0f));
 	//model_ = glm::scale(model_, glm::vec3(0.33 * scale, 0.33 * 4 / 3 * scale, 0.33));
 	//model = glm::scale(model, glm::vec3(0.33, 0.33, 0.33));
-	pShaderProg_->setMatrix4fv("Model", 1, GL_FALSE, glm::value_ptr(model));???
+    pShaderProg_->setMatrix4fv("Model", 1, GL_FALSE, glm::value_ptr(model));
 	pShaderProg_->setMatrix4fv("View", 1, GL_FALSE, glm::value_ptr(view));
 	pShaderProg_->setMatrix4fv("Projection", 1, GL_FALSE, glm::value_ptr(projection));
 
 	glDrawElements(GL_TRIANGLES, eboSize_, GL_UNSIGNED_INT, 0);
 
 	glBindVertexArray(0);
+	pShaderProg_->unuse();
 }
 
 void CGLMesh::move(QPointF pos, float scale)

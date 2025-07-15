@@ -53,6 +53,6 @@ void main()
 	vec3 specularLight = specularColor * light.specular * deltaSpecular;
 
     //vec3 result = ambientLight + diffuseLight + specularLight;
-    vec3 result = diffuseColor;???
+    vec3 result = diffuseColor;
     FragColor = vec4(result, 1.0);
 };

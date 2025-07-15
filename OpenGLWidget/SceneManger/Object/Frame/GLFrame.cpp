@@ -47,6 +47,7 @@ void CGLFrame::initialize()
 	// ------------------------- °ó¶¨texture -------------------------
 	pShaderProg_->use();
 	pShaderProg_->set1i("frameTexture", 0);
+	pShaderProg_->unuse();
 
 	VAO_ = VAO;
 	VBO_ = VBO;
@@ -67,6 +68,7 @@ void CGLFrame::draw(const glm::mat4& view, const glm::mat4& projection, const GL
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 
 	glBindVertexArray(0);
+	pShaderProg_->unuse();
 }
 
 void CGLFrame::move(const QPoint& pos, const float& scale)
@@ -79,6 +81,7 @@ void CGLFrame::move(const QPoint& pos, const float& scale)
 		qDebug() << "move pos: " << x << " " << y;
 		pShaderProg_->use();
 		pShaderProg_->set2f("pos", x, y);
+		pShaderProg_->unuse();
 	}
 	
 }

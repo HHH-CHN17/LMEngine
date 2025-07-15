@@ -28,6 +28,7 @@ public:
 	void initialize(const char* vertexPath, const char* fragmentPath);
 	// 使用/激活程序
 	void use();
+	void unuse();
 	// 设置uniform值
 	void set1b(const std::string& name, bool value);
 	void set1i(const std::string& name, int value);

@@ -15,23 +15,23 @@ void GLShaderProgram::initialize(const char* vertexPath, const char* fragmentPat
 {
     initializeOpenGLFunctions();
 
-    std::string vertexCode{};
-    std::string fragmentCode{};
+    QByteArray vertexCode{};
+    QByteArray fragmentCode{};
     QFile vShaderFile{ vertexPath };
     QFile fShaderFile{ fragmentPath };
     if (!vShaderFile.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         qDebug() << "ERROR::VSHADER::FILE_NOT_SUCCESFULLY_READ";
     }
-    vertexCode = vShaderFile.readAll().toStdString();
+    vertexCode = vShaderFile.readAll();
 
     if (!fShaderFile.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         qDebug() << "ERROR::VSHADER::FILE_NOT_SUCCESFULLY_READ";
     }
-    fragmentCode = fShaderFile.readAll().toStdString();
+    fragmentCode = fShaderFile.readAll();
 
-    auto strVertexShaderSource = vertexCode.c_str();
+    auto strVertexShaderSource = vertexCode.constData();
     GLuint vertexShader = 0;
     vertexShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, &strVertexShaderSource, nullptr);
@@ -46,7 +46,7 @@ void GLShaderProgram::initialize(const char* vertexPath, const char* fragmentPat
         qDebug() << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog;
     }
 
-    auto strFragmentShaderSource = fragmentCode.c_str();
+    auto strFragmentShaderSource = fragmentCode.constData();
     GLuint fragmentShader = 0;
     fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragmentShader, 1, &strFragmentShaderSource, nullptr);
@@ -58,24 +58,24 @@ void GLShaderProgram::initialize(const char* vertexPath, const char* fragmentPat
     if (!success1)
     {
         glGetShaderInfoLog(fragmentShader, 512, nullptr, infoLog1);
-        qDebug() << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << QString(infoLog1);
+        qDebug() << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog1;
     }
 
-    GLuint program = 0;
-    program = glCreateProgram();
-    glAttachShader(program, vertexShader);
-    glAttachShader(program, fragmentShader);
-    glLinkProgram(program);
+    GLuint shaderProgram = 0;
+    shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
 
     int success2;
     char infoLog2[512];
-    glGetProgramiv(program, GL_LINK_STATUS, &success2);
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success2);
     if (!success2) {
-        glGetProgramInfoLog(program, 512, nullptr, infoLog2);
-        qDebug() << "ERROR::PROGRAM::LINK_FAILED\n" << QString(infoLog2);
+        glGetProgramInfoLog(shaderProgram, 512, nullptr, infoLog2);
+        qDebug() << "ERROR::PROGRAM::LINK_FAILED\n" << infoLog2;
     }
 
-    ProgramID_ = program;
+    ProgramID_ = shaderProgram;
 
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
@@ -90,6 +90,12 @@ void GLShaderProgram::use()
 {
     glUseProgram(ProgramID_);
 }
+
+void GLShaderProgram::unuse()
+{
+    glUseProgram(0);
+}
+
 // ÉèÖÃuniformÖµ
 void GLShaderProgram::set1b(const std::string& name, bool value)
 {
