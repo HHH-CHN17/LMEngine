@@ -95,8 +95,8 @@ private:
 
     GLShaderProgram* pMainShaderProg_ = nullptr;
 
-    // ------------------------- 渲染到FBO的texture上的所需数据 -------------------------
-    GLuint PBOIds_[0] = { 0, 0 };
+    // ------------------------- PBO数据，用于录屏 -------------------------
+    GLuint PBOIds_[2] = { 0, 0 };
 
     // ------------------------- 渲染到FBO的texture上的所需数据 -------------------------
     GLSceneManager* pGLSceneManager_ = nullptr;

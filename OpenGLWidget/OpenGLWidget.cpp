@@ -158,6 +158,7 @@ void OpenGLWidget::initFrameBuffer()
 	// 将帧缓冲对象绑定至默认缓冲区，即解绑当前帧缓冲对象
 	glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
 
+	planeFBO_ = FBO;
 }
 
 void OpenGLWidget::initPBOs()
@@ -202,10 +203,13 @@ void OpenGLWidget::paintGL()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glm::vec3 lightPos(3.5f, 3.0f, 3.3f);
+	static int degree_ = 0;
+	degree_ = ++degree_ % 3600; // 此时degree_的值域为[0, 36000]
+	lightPos = glm::vec3(2.0f * cos(degree_ / 100.0f), 1.0f, 2.0f * sin(degree_ / 100.0f));
 	pGLSceneManager_->draw(view, projection, FrameTexID_, lightPos, pCamera_->position_);
 
 	if (isRecording) {
-        recordAV();
+        //recordAV();
 	}
 
 	// ------------------------- 当前屏幕渲染（将离屏渲染的纹理图像渲染到当前屏幕上） -------------------------
@@ -333,7 +337,7 @@ void OpenGLWidget::recordAV()
 	//glBufferData(GL_PIXEL_PACK_BUFFER, DATA_SIZE, 0, GL_STREAM_DRAW);
 	//ptr表示GPU上的PBO在内存空间的映射地址，我们操作ptr，实际上是直接操作的GPU中的PBO
 	GLubyte* ptr = static_cast<GLubyte*>(glMapBufferRange(GL_PIXEL_PACK_BUFFER,
-		0, DATA_SIZE, GL_MAP_READ_BIT));
+		0, width() * height() * 4, GL_MAP_READ_BIT));
 	if (ptr)
 	{
 		// 9. 直接在映射的像素缓冲区上修改像素数据
