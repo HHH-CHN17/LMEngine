@@ -301,6 +301,8 @@ void OpenGLWidget::startRecord()
 	QDateTime dateTime = QDateTime::currentDateTime();
 	QString pathStr = qApp->applicationDirPath() + "/" + dateTime.toString("yyyyMMddhhmmss") + ".mp4";
 
+	// todo 需要在主窗口中固定窗口的宽高
+	CAVRecorder::GetInstance()->setInputWH(width(), width());
 	CAVRecorder::GetInstance()->setOutputWH(640, 480);
 	Q_ASSERT(CAVRecorder::GetInstance()->initOutputFile(pathStr.toUtf8().data()));
 
@@ -354,7 +356,6 @@ void OpenGLWidget::recordAV(GLubyte* ptr, int w, int h, int channel)
 	{
 		qDebug() << "can't record video!";
 	}
-	CAVRecorder::GetInstance()->setInputWH(w, h);
 	Q_ASSERT(CAVRecorder::GetInstance()->recording(ptr));
 }
 

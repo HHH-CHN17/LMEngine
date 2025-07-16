@@ -137,17 +137,6 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
     int insize[AV_NUM_DATA_POINTERS] = { 0 };
     insize[0] = videoInWidth_ * 4;
 
-    // videoSwCtx_重分配？？？问问最好该咋做
-    if (videoSwCtx_ != NULL) {
-        sws_freeContext(videoSwCtx_);
-        videoSwCtx_ = NULL;
-    }
-    videoSwCtx_ = sws_getCachedContext(videoSwCtx_, videoInWidth_, videoInHeight_, AV_PIX_FMT_RGBA,
-        videoOutWidth_, videoOutHeight_, AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
-    if (videoSwCtx_ == NULL) {
-        std::cout << "sws_getCachedContext failed" << endl;
-        return false;
-    }
     int ret = sws_scale(videoSwCtx_, indata, insize, 0, videoInHeight_, yuvFrame->data, yuvFrame->linesize);
     if (ret < 0) {
         return false;
