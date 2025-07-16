@@ -63,6 +63,7 @@ private:
     // 使用双PBO记录视频
     void usePBOs();
     void recordAV(GLubyte* ptr, int w, int h, int channel);
+    void saveImage(GLubyte* ptr);
 
 private:
     QOpenGLContext* mainCtx_ = nullptr;

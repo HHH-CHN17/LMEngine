@@ -1,6 +1,8 @@
 #include "AVRecorder.h"
 #include <sys/time.h>
+#include <QObject>
 #include <QDebug>
+#include <libavutil/log.h>
 
 CAVRecorder* CAVRecorder::GetInstance()
 {
@@ -21,7 +23,7 @@ CAVRecorder::CAVRecorder()
     audioStream = NULL;
 
     videoSwCtx_ = NULL;
-    yuvFrame = NULL;
+    yuvFrame_ = NULL;
 
     m_filePath = "";
 
@@ -44,9 +46,11 @@ CAVRecorder::CAVRecorder()
     av_register_all();
     avcodec_register_all();
 
+    av_log_set_level(AV_LOG_DEBUG);
+
     g_aacEncodeConfig = initAudioEncodeConfiguration();
     if (g_aacEncodeConfig == NULL) {
-	    std::cout << "initAudioEncodeConfiguration failed..." << endl;
+	    qDebug() << "initAudioEncodeConfiguration failed...";
         return;
     }
 
@@ -61,12 +65,14 @@ void CAVRecorder::setInputWH(int w, int h)
 {
     videoInWidth_ = w;
     videoInHeight_ = h;
+	qDebug() << "setInputWH:" << videoInWidth_ << " " << videoInHeight_;
 }
 
 void CAVRecorder::setOutputWH(int w, int h)
 {
     videoOutWidth_ = w;
     videoOutHeight_ = h;
+	qDebug() << "setOutputWH:" << videoOutWidth_ << " " << videoOutHeight_;
 }
 
 bool CAVRecorder::initOutputFile(const char* file)
@@ -75,34 +81,153 @@ bool CAVRecorder::initOutputFile(const char* file)
 
     avformat_alloc_output_context2(&avFormatCtx, NULL, NULL, file);
     if (avFormatCtx == NULL) {
-	    std::cout << "avformat_alloc_output_context2 failed" << endl;
+	    qDebug() << "avformat_alloc_output_context2 failed";
         return false;
     }
 
     m_filePath = file;
     m_audioFramePts = 0;
 
-    addVideoStream();
+    assert(addVideoStream());
 
-    addAudioStream();
+    assert(addAudioStream());
 
     if (avio_open(&avFormatCtx->pb, file, AVIO_FLAG_WRITE) != 0) {
-	    std::cout << "avio_open failed" << endl;
+	    qDebug() << "avio_open failed";
         return false;
     }
 
     if (avformat_write_header(avFormatCtx, NULL) != 0) {
-	    std::cout << "avformat_write_header failed" << endl;
+	    qDebug() << "avformat_write_header failed";
         return false;
     }
 
-    std::cout << "initOutputFile success..." << endl;
+    qDebug() << "initOutputFile success...";
 
     m_bRecording = true;
     m_lastPts = startTimeStamp = getTickCount();
 
     return true;
 
+}
+
+bool CAVRecorder::addVideoStream()
+{
+
+    if (avFormatCtx == NULL) {
+        return false;
+    }
+
+    AVCodec* videoCodec = avcodec_find_encoder(AV_CODEC_ID_H264);
+    if (videoCodec == NULL) {
+        qDebug() << "avcodec_find_encoder failed";
+        return false;
+    }
+
+    videoCodecCtx = avcodec_alloc_context3(videoCodec);
+    if (videoCodecCtx == NULL) {
+        qDebug() << "avcodec_alloc_context3 failed";
+        return false;
+    }
+
+    videoCodecCtx->width = videoOutWidth_;
+    videoCodecCtx->height = videoOutHeight_;
+
+    AVRational time_base;
+    time_base.num = 1; time_base.den = 1000;
+    videoCodecCtx->time_base = time_base;
+
+    videoCodecCtx->gop_size = 50;
+    videoCodecCtx->max_b_frames = 0;
+    videoCodecCtx->pix_fmt = AV_PIX_FMT_YUV420P;
+    videoCodecCtx->codec_id = AV_CODEC_ID_H264;
+    //av_opt_set(videoCodecCtx->priv_data, "preset", "superfast", 0);
+    videoCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    videoCodecCtx->bit_rate = m_videoOutBitrate;
+
+    int ret = avcodec_open2(videoCodecCtx, videoCodec, NULL);
+    if (ret != 0) {
+        char err_buf[AV_ERROR_MAX_STRING_SIZE] = { 0 };
+        av_strerror(ret, err_buf, AV_ERROR_MAX_STRING_SIZE);
+        qDebug() << "avcodec_open2 failed: " << err_buf << " (error code: " << ret << ")";
+        avcodec_free_context(&videoCodecCtx);
+        return false;
+    }
+    qDebug() << "avcodec_open2 success...";
+
+    videoStream = avformat_new_stream(avFormatCtx, NULL);
+    if (videoStream == NULL) {
+        qDebug() << "avformat_new_stream failed";
+        return false;
+    }
+    videoStream->codecpar->codec_tag = 0;
+    avcodec_parameters_from_context(videoStream->codecpar, videoCodecCtx);
+
+    av_dump_format(avFormatCtx, 0, m_filePath.c_str(), 1);
+
+    videoSwCtx_ = sws_getCachedContext(videoSwCtx_,
+        videoInWidth_, videoInHeight_, AV_PIX_FMT_RGBA,
+        videoOutWidth_, videoOutHeight_, AV_PIX_FMT_YUV420P,
+        SWS_BICUBIC, NULL, NULL, NULL
+    );
+    if (videoSwCtx_ == NULL) {
+        qDebug() << "sws_getCachedContext failed";
+        return false;
+    }
+
+    yuvFrame_ = av_frame_alloc();
+    yuvFrame_->format = AV_PIX_FMT_YUV420P;
+    yuvFrame_->width = videoOutWidth_;
+    yuvFrame_->height = videoOutHeight_;
+    yuvFrame_->pts = 0;
+    if (av_frame_get_buffer(yuvFrame_, 32) != 0) {
+        qDebug() << "av_frame_get_buffer failed";
+        return false;
+    }
+
+    return true;
+}
+
+bool CAVRecorder::addAudioStream()
+{
+    if (avFormatCtx == NULL) {
+        return false;
+    }
+    AVCodec* audioCodec = avcodec_find_encoder(AV_CODEC_ID_AAC);
+    if (audioCodec == NULL) {
+        qDebug() << "avcodec_find_encoder failed";
+        return false;
+    }
+
+    audioCodecCtx = avcodec_alloc_context3(audioCodec);
+    if (audioCodecCtx == NULL) {
+        qDebug() << " avcodec_alloc_context3 failed";
+        return false;
+    }
+
+    audioCodecCtx->sample_rate = m_audioOutSamplerate;
+    audioCodecCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
+    audioCodecCtx->channels = m_audioOutChannels;
+    audioCodecCtx->channel_layout = av_get_default_channel_layout(m_audioOutChannels);
+    audioCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+    if (avcodec_open2(audioCodecCtx, audioCodec, NULL) != 0) {
+        qDebug() << " avcodec_open2 failed";
+        return false;
+    }
+
+    audioStream = avformat_new_stream(avFormatCtx, NULL);
+    if (audioStream == NULL) {
+        qDebug() << " avformat_new_stream failed";
+        return false;
+    }
+
+    audioStream->codecpar->codec_tag = 0;
+    avcodec_parameters_from_context(audioStream->codecpar, audioCodecCtx);
+
+    av_dump_format(avFormatCtx, 0, m_filePath.c_str(), 1);
+
+    return true;
 }
 
 void CAVRecorder::stopRecord()
@@ -123,7 +248,7 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
         return false;
     }
 
-    if (avFormatCtx == NULL || videoSwCtx_ == NULL || yuvFrame == NULL) {
+    if (avFormatCtx == NULL || videoSwCtx_ == NULL || yuvFrame_ == NULL) {
         return false;
     }
 
@@ -137,29 +262,29 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
     int insize[AV_NUM_DATA_POINTERS] = { 0 };
     insize[0] = videoInWidth_ * 4;
 
-    int ret = sws_scale(videoSwCtx_, indata, insize, 0, videoInHeight_, yuvFrame->data, yuvFrame->linesize);
+    int ret = sws_scale(videoSwCtx_, indata, insize, 0, videoInHeight_, yuvFrame_->data, yuvFrame_->linesize);
     if (ret < 0) {
         return false;
     }
 
     //解码出来是倒置的，这里把yuv做一个转换.
-    yuvFrame->data[0] += yuvFrame->linesize[0] * (videoCodecCtx->height - 1);
-    yuvFrame->linesize[0] *= -1;
-    yuvFrame->data[1] += yuvFrame->linesize[1] * (videoCodecCtx->height / 2 - 1);
-    yuvFrame->linesize[1] *= -1;
-    yuvFrame->data[2] += yuvFrame->linesize[2] * (videoCodecCtx->height / 2 - 1);
-    yuvFrame->linesize[2] *= -1;
+    yuvFrame_->data[0] += yuvFrame_->linesize[0] * (videoCodecCtx->height - 1);
+    yuvFrame_->linesize[0] *= -1;
+    yuvFrame_->data[1] += yuvFrame_->linesize[1] * (videoCodecCtx->height / 2 - 1);
+    yuvFrame_->linesize[1] *= -1;
+    yuvFrame_->data[2] += yuvFrame_->linesize[2] * (videoCodecCtx->height / 2 - 1);
+    yuvFrame_->linesize[2] *= -1;
 
 
     unsigned long currentPts = getTickCount() - startTimeStamp;
     if (currentPts - m_lastPts <= 0) {
         currentPts = currentPts + 1;
     }
-    yuvFrame->pts = currentPts;
+    yuvFrame_->pts = currentPts;
 
     m_lastPts = currentPts;
     //编码
-    if (avcodec_send_frame(videoCodecCtx, yuvFrame) != 0) {
+    if (avcodec_send_frame(videoCodecCtx, yuvFrame_) != 0) {
         return false;
     }
     AVPacket packet;
@@ -216,126 +341,13 @@ bool CAVRecorder::writeFrame(AVPacket* packet)
         retValue = av_interleaved_write_frame(avFormatCtx, packet);
     }
     if (retValue != 0) {
-	    std::cout << "av_interleaved_write_frame failed :" << retValue << endl;
-        return false;
-    }
-
-    return true;
-}
-bool CAVRecorder::addVideoStream()
-{
-
-    if (avFormatCtx == NULL) {
-        return false;
-    }
-
-    AVCodec* videoCodec = avcodec_find_encoder(AV_CODEC_ID_H264);
-    if (videoCodec == NULL) {
-	    std::cout << "avcodec_find_encoder failed" << endl;
-        return false;
-    }
-
-    videoCodecCtx = avcodec_alloc_context3(videoCodec);
-    if (videoCodecCtx == NULL) {
-	    std::cout << "avcodec_alloc_context3 failed" << endl;
-        return false;
-    }
-
-    videoCodecCtx->width = videoOutWidth_;
-    videoCodecCtx->height = videoOutHeight_;
-
-    AVRational time_base;
-    time_base.num = 1; time_base.den = 1000;
-    videoCodecCtx->time_base = time_base;
-
-    videoCodecCtx->gop_size = 50;
-    videoCodecCtx->max_b_frames = 0;
-    videoCodecCtx->pix_fmt = AV_PIX_FMT_YUV420P;
-    videoCodecCtx->codec_id = AV_CODEC_ID_H264;
-    av_opt_set(videoCodecCtx->priv_data, "preset", "superfast", 0);
-    videoCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-
-    if (avcodec_open2(videoCodecCtx, videoCodec, NULL) != 0) {
-        avcodec_free_context(&videoCodecCtx);
-        std::cout << "avcodec_open2 failed" << endl;
-        return false;
-    }
-    std::cout << "avcodec_open2 success..." << endl;
-
-    videoStream = avformat_new_stream(avFormatCtx, NULL);
-    if (videoStream == NULL) {
-	    std::cout << "avformat_new_stream failed" << endl;
-        return false;
-    }
-    videoStream->codecpar->codec_tag = 0;
-    avcodec_parameters_from_context(videoStream->codecpar, videoCodecCtx);
-
-    av_dump_format(avFormatCtx, 0, m_filePath.c_str(), 1);
-
-    videoSwCtx_ = sws_getCachedContext(videoSwCtx_, videoInWidth_, videoInHeight_, AV_PIX_FMT_RGBA,
-        videoOutWidth_, videoOutHeight_, AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
-    if (videoSwCtx_ == NULL) {
-	    std::cout << "sws_getCachedContext failed" << endl;
-        return false;
-    }
-
-    yuvFrame = av_frame_alloc();
-    yuvFrame->format = AV_PIX_FMT_YUV420P;
-    yuvFrame->width = videoOutWidth_;
-    yuvFrame->height = videoOutHeight_;
-    yuvFrame->pts = 0;
-    if (av_frame_get_buffer(yuvFrame, 32) != 0) {
-	    std::cout << "av_frame_get_buffer failed" << endl;
+	    qDebug() << "av_interleaved_write_frame failed :" << retValue;
         return false;
     }
 
     return true;
 }
 
-bool CAVRecorder::addAudioStream()
-{
-    if (avFormatCtx == NULL) {
-        return false;
-    }
-    AVCodec* audioCodec = avcodec_find_encoder(AV_CODEC_ID_AAC);
-    if (audioCodec == NULL) {
-	    std::cout << "avcodec_find_encoder failed" << endl;
-        return false;
-    }
-
-    audioCodecCtx = avcodec_alloc_context3(audioCodec);
-    if (audioCodecCtx == NULL) {
-	    std::cout << " avcodec_alloc_context3 failed" << endl;
-        return false;
-    }
-
-    audioCodecCtx->sample_rate = m_audioOutSamplerate;
-    audioCodecCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
-    audioCodecCtx->channels = m_audioOutChannels;
-    audioCodecCtx->channel_layout = av_get_default_channel_layout(m_audioOutChannels);
-    audioCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-
-    if (avcodec_open2(audioCodecCtx, audioCodec, NULL) != 0) {
-	    std::cout << " avcodec_open2 failed" << endl;
-        return false;
-    }
-
-    audioStream = avformat_new_stream(avFormatCtx, NULL);
-    if (audioStream == NULL) {
-	    std::cout << " avformat_new_stream failed" << endl;
-        return false;
-    }
-
-    audioStream->codecpar->codec_tag = 0;
-    avcodec_parameters_from_context(audioStream->codecpar, audioCodecCtx);
-
-    av_dump_format(avFormatCtx, 0, m_filePath.c_str(), 1);
-
-
-
-
-    return true;
-}
 
 bool CAVRecorder::endWriteMp4File()
 {
@@ -347,16 +359,16 @@ bool CAVRecorder::endWriteMp4File()
     }
 
     if (av_write_trailer(avFormatCtx) != 0) {
-	    std::cout << "av_write_trailer failed" << endl;
+	    qDebug() << "av_write_trailer failed";
         return false;
     }
 
     if (avio_closep(&avFormatCtx->pb) != 0) {
-	    std::cout << "avio_close failed" << endl;
+	    qDebug() << "avio_close failed";
         return false;
     }
 
-    std::cout << "endWriteMp4File success..." << endl;
+    qDebug() << "endWriteMp4File success...";
     return true;
 
 }
@@ -378,9 +390,9 @@ void CAVRecorder::freeAll()
         videoSwCtx_ = NULL;
     }
 
-    if (yuvFrame != NULL) {
-        av_frame_free(&yuvFrame);
-        yuvFrame = NULL;
+    if (yuvFrame_ != NULL) {
+        av_frame_free(&yuvFrame_);
+        yuvFrame_ = NULL;
     }
 
     if (avFormatCtx != NULL) {

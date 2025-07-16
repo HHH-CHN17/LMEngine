@@ -59,6 +59,7 @@ SOURCES += \
     ./OpenGLWidget/SceneManger/Object/Sun/GLSun.cpp \
     ./OpenGLWidget/VideoCaptureThread/VideoCaptureThread.cpp \
     ./OpenGLWidget/VideoCaptureThread/YUVDraw/GLYuvDraw.cpp \
+    ./AVRecorder/AVRecorder.cpp \
     ./Common/Camera/GLCamera.cpp \
     ./Common/ShaderProgram/GLShaderProgram.cpp
 
@@ -75,6 +76,7 @@ INCLUDEPATH += ./OpenGLWidget/SceneManger/Object/Model
 INCLUDEPATH += ./OpenGLWidget/SceneManger/Object/Model/Mesh
 INCLUDEPATH += ./OpenGLWidget/SceneManger/Object/SkyBox
 INCLUDEPATH += ./OpenGLWidget/SceneManger/Object/Sun
+INCLUDEPATH += ./AVRecorder
 
 HEADERS += \
     ./MainWidget.h \
@@ -87,6 +89,7 @@ HEADERS += \
     ./OpenGLWidget/SceneManger/Object/Sun/GLSun.h \
     ./OpenGLWidget/VideoCaptureThread/VideoCaptureThread.h \
     ./OpenGLWidget/VideoCaptureThread/YUVDraw/GLYuvDraw.h \
+    ./AVRecorder/AVRecorder.h \
     ./Common/ShaderProgram/GLShaderProgram.h \
     ./Common/Camera/GLCamera.h \
     ./Common/DataDefine.h \

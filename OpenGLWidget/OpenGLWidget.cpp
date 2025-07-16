@@ -206,8 +206,8 @@ void OpenGLWidget::paintGL()
 
 	glm::vec3 lightPos(3.5f, 3.0f, 3.3f);
 	static int interval_ = 0;
-	interval_ = ++interval_ % 1000;	// 1000指的是一个循环为1000
-	double degree = 2.0 * 3.1415926535 * interval_ / 1000;	// 此时degree的值域为[0, 2*pi]
+	interval_ = ++interval_ % 100;	// 1000指的是一个循环为1000
+	double degree = 2.0 * 3.1415926535 * interval_ / 100;	// 此时degree的值域为[0, 2*pi]
 	lightPos = glm::vec3(2.0f * cos(degree), 1.0f, 2.0f * sin(degree));
 	pGLSceneManager_->draw(view, projection, FrameTexID_, lightPos, pCamera_->position_);
 
@@ -300,10 +300,12 @@ void OpenGLWidget::startRecord()
 	// initialize，随后在paintGL中记录
 	QDateTime dateTime = QDateTime::currentDateTime();
 	QString pathStr = qApp->applicationDirPath() + "/" + dateTime.toString("yyyyMMddhhmmss") + ".mp4";
+	qDebug() << "start record video to: " << pathStr;
 
 	// todo 需要在主窗口中固定窗口的宽高
-	CAVRecorder::GetInstance()->setInputWH(width(), width());
-	CAVRecorder::GetInstance()->setOutputWH(640, 480);
+	CAVRecorder::GetInstance()->setInputWH(width(), height());
+	//CAVRecorder::GetInstance()->setOutputWH(640, 480);
+	CAVRecorder::GetInstance()->setOutputWH(width(), height());
 	Q_ASSERT(CAVRecorder::GetInstance()->initOutputFile(pathStr.toUtf8().data()));
 
 	isRecording_ = true;
@@ -340,6 +342,7 @@ void OpenGLWidget::usePBOs()
 	if (ptr)
 	{
 		recordAV(ptr, width(), height(), 4);
+		//saveImage(ptr);
 		glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 	}
 
@@ -348,6 +351,20 @@ void OpenGLWidget::usePBOs()
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
 	std::swap(dma, read);
+}
+
+void OpenGLWidget::saveImage(GLubyte* ptr)
+{
+
+	QString tempPath = "D:/1_Code/QtCreator/PboPack.png";
+	QImage image = QImage(ptr, width(), height(), QImage::Format_ARGB32);
+	if (image.isNull()) {
+		return;
+	}
+	image = image.rgbSwapped();
+	image = image.mirrored();
+	if (!image.save(tempPath, "PNG", 100))
+		qDebug() << "save image error";
 }
 
 void OpenGLWidget::recordAV(GLubyte* ptr, int w, int h, int channel)

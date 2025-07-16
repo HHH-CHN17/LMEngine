@@ -44,7 +44,7 @@ private:
 
     SwsContext* videoSwCtx_;
 
-    AVFrame* yuvFrame; //RGB-->YUV-->H.264
+    AVFrame* yuvFrame_; //RGB-->YUV-->H.264
 
     std::string             m_filePath;
 

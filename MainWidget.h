@@ -18,7 +18,7 @@ public:
     ~MainWidget();
 
 private slots:
-    void slot_RecordButtonClicked(bool checked);
+    void slot_RecordButtonClicked();
 
 private:
     Ui::MainWidget *ui;
