@@ -38,6 +38,8 @@ typedef struct  YUVBuffDef
 
 #pragma pack(pop)
 
+#pragma pack(push, 4)
+
 typedef struct vec3f
 {
     float x;
@@ -60,5 +62,7 @@ typedef struct VertexAttr
     vec3f bitan;
 
 }VertexAttr;
+
+#pragma pack(pop)
 
 static_assert(std::is_pod_v<VertexAttr>, "VertexAttr is not POD!!");

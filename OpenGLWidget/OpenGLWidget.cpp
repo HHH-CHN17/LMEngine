@@ -1,4 +1,6 @@
 #include "OpenGLWidget.h"
+
+#include <qapplication.h>
 #include <QDebug>
 #include <QTextStream>
 #include <QKeyEvent>
@@ -203,13 +205,14 @@ void OpenGLWidget::paintGL()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glm::vec3 lightPos(3.5f, 3.0f, 3.3f);
-	static int degree_ = 0;
-	degree_ = ++degree_ % 3600; // 此时degree_的值域为[0, 36000]
-	lightPos = glm::vec3(2.0f * cos(degree_ / 100.0f), 1.0f, 2.0f * sin(degree_ / 100.0f));
+	static int interval_ = 0;
+	interval_ = ++interval_ % 1000;	// 1000指的是一个循环为1000
+	double degree = 2.0 * 3.1415926535 * interval_ / 1000;	// 此时degree的值域为[0, 2*pi]
+	lightPos = glm::vec3(2.0f * cos(degree), 1.0f, 2.0f * sin(degree));
 	pGLSceneManager_->draw(view, projection, FrameTexID_, lightPos, pCamera_->position_);
 
-	if (isRecording) {
-        //recordAV();
+	if (isRecording_) {
+        usePBOs();
 	}
 
 	// ------------------------- 当前屏幕渲染（将离屏渲染的纹理图像渲染到当前屏幕上） -------------------------
@@ -295,66 +298,71 @@ void OpenGLWidget::resizeGL(int w, int h)
 void OpenGLWidget::startRecord()
 {
 	// initialize，随后在paintGL中记录
+	QDateTime dateTime = QDateTime::currentDateTime();
+	QString pathStr = qApp->applicationDirPath() + "/" + dateTime.toString("yyyyMMddhhmmss") + ".mp4";
 
-	isRecording = true;
+	CAVRecorder::GetInstance()->setOutputWH(640, 480);
+	Q_ASSERT(CAVRecorder::GetInstance()->initOutputFile(pathStr.toUtf8().data()));
+
+	isRecording_ = true;
 }
 
-void OpenGLWidget::recordAV()
+void OpenGLWidget::usePBOs()
 {
-	static int shift = 0;
-	static int index = 0;               // pbo index to alternate every frame
-	int nextIndex = 1;                  // pbo index used for next frame
-
-	// brightness shift amount
-	++shift;
-	shift %= 200;
-
+	// dma指的是直接内存访问技术，硬件不通过CPU，而是通过DMA控制器，直接访问，修改，传输内存或显存中的数据。
+	static int dma = 0;
+	static int read = 0;
 
 	/*********************************** USES PBO (Streaming Texture Uploads 流式纹理更新) ***********************************/
 
-	// 4. PBOIds_[idx_] 负责将像素数据从PBO拷贝到纹理对象
-	// 4.1 PBOIds_[nextidx] 负责更新像素数据
-	index = (index + 1) % 2;
-	int nextidx = (index + 1) % 2;
-
 	// https://learn.microsoft.com/zh-cn/windows/win32/opengl/glreadbuffer
 	// https://blog.csdn.net/heyuchang666/article/details/69523417
-	// 5. 将颜色缓冲区指定为后续 glReadPixels 和 glCopyPixels 命令的源
+	// QOpenGLWidget默认使用双缓冲，将颜色缓冲区指定为后续 glReadPixels 和 glCopyPixels 命令的源
 	glReadBuffer(GL_FRONT);
 
 	// ------------------------- pack PBO -------------------------
-	// 6. 当使用 glBindBuffer() 将PBO绑定到GL_PIXEL_PACK_BUFFER上后，
+	// 当使用 glBindBuffer() 将PBO绑定到GL_PIXEL_PACK_BUFFER上后，
 	// 后续所有的pack操作：如 glReadPixels(), glGetTexImage() 等函数
 	// 会将像素数据从 帧缓冲区 或者 纹理图像 传输到 PBO对应的像素缓冲区
-	glBindBuffer(GL_PIXEL_PACK_BUFFER, PBOIds_[index]);
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, PBOIds_[dma]);
 	//glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, IMAGE_WIDTH, IMAGE_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-	glReadPixels(0, 0, geometry().width(), geometry().height(), GL_RGBA, GL_UNSIGNED_BYTE, 0);
+	glReadPixels(0, 0, width(), height(), GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
 	// ------------------------- update PBO -------------------------
-	// 7. 更换绑定的PBO，用于更新像素数据
-	glBindBuffer(GL_PIXEL_PACK_BUFFER, PBOIds_[nextidx]);
-	// 8.1 显然此处不能像unpack操作一样给清空缓存了，因为我们要读数据
+	// 更换绑定的PBO，用于更新像素数据
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, PBOIds_[read]);
 	//glBufferData(GL_PIXEL_PACK_BUFFER, DATA_SIZE, 0, GL_STREAM_DRAW);
 	//ptr表示GPU上的PBO在内存空间的映射地址，我们操作ptr，实际上是直接操作的GPU中的PBO
 	GLubyte* ptr = static_cast<GLubyte*>(glMapBufferRange(GL_PIXEL_PACK_BUFFER,
 		0, width() * height() * 4, GL_MAP_READ_BIT));
 	if (ptr)
 	{
-		// 9. 直接在映射的像素缓冲区上修改像素数据
-		//add(ptr, width(), height(), shift, colorBuffer_);
-		// 10.1 用完记得释放
+		recordAV(ptr, width(), height(), 4);
 		glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 	}
 
-	// 11. 从第4点可以看出，使用完后记得释放绑定
+	// 使用完后记得释放绑定
 	// glBindBuffer()一旦绑定到 0，所有像素操作就会以常规方式运行。
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+
+	std::swap(dma, read);
+}
+
+void OpenGLWidget::recordAV(GLubyte* ptr, int w, int h, int channel)
+{
+	if (!isRecording_)
+	{
+		qDebug() << "can't record video!";
+	}
+	CAVRecorder::GetInstance()->setInputWH(w, h);
+	Q_ASSERT(CAVRecorder::GetInstance()->recording(ptr));
 }
 
 void OpenGLWidget::stopRecord()
 {
-	isRecording = false;
-	// release
+	isRecording_ = false;
+
+	CAVRecorder::GetInstance()->stopRecord();
 }
 
 void OpenGLWidget::keyPressEvent(QKeyEvent* event)
