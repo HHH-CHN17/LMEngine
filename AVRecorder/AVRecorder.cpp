@@ -3,6 +3,50 @@
 #include <QObject>
 #include <QDebug>
 #include <libavutil/log.h>
+#include <stdarg.h> 
+
+static void ffmpeg_log_callback(void* ptr, int level, const char* fmt, va_list vargs)
+{
+    // 检查日志级别，我们可以忽略一些过于详细的信息
+    if (level > av_log_get_level())
+        return;
+
+    // 创建一个足够大的缓冲区来存储格式化后的日志消息
+    char message[1024];
+
+    // 使用 vsnprintf 安全地格式化日志内容
+    // FFmpeg 传递的 fmt 格式字符串通常已经包含了像 "[libx264 @ ...]" 这样的上下文信息
+    vsnprintf(message, sizeof(message), fmt, vargs);
+
+    // 去掉消息末尾多余的换行符，因为qDebug会自动添加
+    size_t len = strlen(message);
+    if (len > 0 && message[len - 1] == '\n') {
+        message[len - 1] = '\0';
+    }
+
+    // 根据FFmpeg的日志级别，选择使用Qt的不同输出流
+    switch (level) {
+    case AV_LOG_PANIC:
+    case AV_LOG_FATAL:
+    case AV_LOG_ERROR:
+        qCritical() << "FFmpeg:" << message;
+        break;
+    case AV_LOG_WARNING:
+        qWarning() << "FFmpeg:" << message;
+        break;
+    case AV_LOG_INFO:
+        qInfo() << "FFmpeg:" << message;
+        break;
+    case AV_LOG_VERBOSE:
+    case AV_LOG_DEBUG:
+    case AV_LOG_TRACE:
+        qDebug() << "FFmpeg:" << message;
+        break;
+    default:
+        qDebug() << "FFmpeg (Unknown Level):" << message;
+        break;
+    }
+}
 
 CAVRecorder* CAVRecorder::GetInstance()
 {
@@ -37,16 +81,18 @@ CAVRecorder::CAVRecorder()
 
     m_audioOutBitrate = 64000;
 
-    m_bRecording = false;
+    isRecording_ = false;
     startTimeStamp = 0;
     m_lastPts = 0;
 
     g_aacEncodeConfig = NULL;
 
+    // debug用
+    av_log_set_level(AV_LOG_DEBUG);
+    av_log_set_callback(ffmpeg_log_callback);
+
     av_register_all();
     avcodec_register_all();
-
-    av_log_set_level(AV_LOG_DEBUG);
 
     g_aacEncodeConfig = initAudioEncodeConfiguration();
     if (g_aacEncodeConfig == NULL) {
@@ -104,7 +150,7 @@ bool CAVRecorder::initOutputFile(const char* file)
 
     qDebug() << "initOutputFile success...";
 
-    m_bRecording = true;
+    isRecording_ = true;
     m_lastPts = startTimeStamp = getTickCount();
 
     return true;
@@ -141,10 +187,11 @@ bool CAVRecorder::addVideoStream()
     videoCodecCtx->max_b_frames = 0;
     videoCodecCtx->pix_fmt = AV_PIX_FMT_YUV420P;
     videoCodecCtx->codec_id = AV_CODEC_ID_H264;
-    //av_opt_set(videoCodecCtx->priv_data, "preset", "superfast", 0);
+    av_opt_set(videoCodecCtx->priv_data, "preset", "superfast", 0);
     videoCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-    videoCodecCtx->bit_rate = m_videoOutBitrate;
+    //videoCodecCtx->bit_rate = m_videoOutBitrate;
 
+    // 注意：h.264要求视频宽高必须为偶数
     int ret = avcodec_open2(videoCodecCtx, videoCodec, NULL);
     if (ret != 0) {
         char err_buf[AV_ERROR_MAX_STRING_SIZE] = { 0 };
@@ -232,7 +279,7 @@ bool CAVRecorder::addAudioStream()
 
 void CAVRecorder::stopRecord()
 {
-    m_bRecording = false;
+    isRecording_ = false;
 
     {
         std::lock_guard<std::mutex> lg{ videoWriterMtx_ };
@@ -244,11 +291,15 @@ void CAVRecorder::stopRecord()
 
 bool CAVRecorder::recording(const unsigned char* rgbData)
 {
-    if (m_bRecording == false) {
+    if (isRecording_ == false) {
+        qDebug() << "not recording!";
         return false;
     }
 
     if (avFormatCtx == NULL || videoSwCtx_ == NULL || yuvFrame_ == NULL) {
+        qDebug() << "avFormatCtx: " << avFormatCtx;
+        qDebug() << "videoSwCtx_: " << videoSwCtx_;
+        qDebug() << "yuvFrame_: " << yuvFrame_;
         return false;
     }
 
@@ -292,6 +343,18 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
 
     int retValue = avcodec_receive_packet(videoCodecCtx, &packet);
     if (retValue != 0 || packet.size <= 0) {
+        char err_buf[AV_ERROR_MAX_STRING_SIZE] = { 0 };
+        av_strerror(retValue, err_buf, AV_ERROR_MAX_STRING_SIZE);
+        qDebug() << "codec error: " << err_buf << " (error code: " << retValue << " packet.size: " << packet.size << ")";
+
+        if (retValue == AVERROR(EAGAIN) || retValue == AVERROR_EOF) {
+            // 这是正常情况，只是暂时没有packet输出
+            // 或者已经到达流的末尾
+            // 在这种情况下，函数应该返回 true，因为发送帧是成功的
+            qDebug() << "EAGAIN AVERROR_EOF";
+            return true;
+        }
+
         return false;
     }
 
@@ -309,7 +372,7 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
 
 bool CAVRecorder::WriteAudioFrameWithPCMData(unsigned char* audioData, int captureSize)
 {
-    if (!m_bRecording) {
+    if (!isRecording_) {
         return false;
     }
 
@@ -320,7 +383,7 @@ bool CAVRecorder::WriteAudioFrameWithPCMData(unsigned char* audioData, int captu
 
 bool CAVRecorder::writeFrame(AVPacket* packet)
 {
-    if (m_bRecording == false) {
+    if (isRecording_ == false) {
         return false;
     }
 

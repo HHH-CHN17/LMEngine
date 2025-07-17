@@ -57,7 +57,7 @@ void VideoCaptureThread::initOpenCV(int w, int h)
 
 	isRunning_ = true;
 
-    QString filePath = "D:/1_Code/QtCreator/LMEngine/facemodel";
+    QString filePath = "D:/WorkSpace/Clion/GitHubProject/LMEngine/facemodel";
 	bool retValue = FACETRACKER_API_init_facetracker_resources((char*)filePath.toStdString().c_str());
 	if (!retValue) {
 		qDebug() << "init facetracker failed.....";

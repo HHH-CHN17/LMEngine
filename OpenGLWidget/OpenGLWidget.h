@@ -54,14 +54,14 @@ protected:
 private:
     // initializeGL()中使用
     void initOffScreenEnv();
-    void initFrameBuffer();
-    void initPBOs();
+    void initSceneFrameBuffer();
+    void initRecordFrameBuffer();
+    void initRecordPBOs();
     // resizeGL(int w, int h)中使用
-    void reallocFrameBuffer(const int& w, const int& h);
-    void reallocPBOs(const int& w, const int& h);
+    void reallocSceneFrameBuffer(const int& w, const int& h);
     void adjustViewPort(const int& w, const int& h);
     // 使用双PBO记录视频
-    void usePBOs();
+    void useRecordPBOs();
     void recordAV(GLubyte* ptr, int w, int h, int channel);
     void saveImage(GLubyte* ptr);
 
@@ -78,8 +78,8 @@ private:
     bool isPressed_ = false;
     CGLCamera* pCamera_ = nullptr;
 
-    // ------------------------- FBO渲染所需数据 -------------------------
-    float planeVertices_[20] =
+    // ------------------------- 渲染数据，这些数据仅用于渲染 -------------------------
+    float sceneVertices_[20] =
     {
 		-1.0f, -1.0f, -1.0f,    0,  0,
 		-1.0f, 1.0f, -1.0f,     0,  1,
@@ -87,21 +87,25 @@ private:
 		1.0f, 1.0f, -1.0f,      1,  1 
     };
 
-    GLuint planeIndices_[6] = {
+    GLuint sceneIndices_[6] = {
         0, 1, 2,
         1, 2, 3
     };
-    GLuint planeVAO_ = 0;
-    GLuint planeVBO_ = 0;
-    GLuint planeEBO_ = 0;
-    GLuint planeFBO_ = 0;
-    GLuint planeTexID_ = 0;
-    GLuint planeRBO_ = 0;
+    GLuint sceneVAO_ = 0;
+    GLuint sceneVBO_ = 0;
+    GLuint sceneEBO_ = 0;
+    GLuint sceneFBO_ = 0;
+    GLuint sceneTexID_ = 0;
+    GLuint sceneRBO_ = 0;
 
     GLShaderProgram* pMainShaderProg_ = nullptr;
 
-    // ------------------------- PBO数据，用于录屏 -------------------------
-    GLuint PBOIds_[2] = { 0, 0 };
+    // ------------------------- 录屏数据，这些数据仅用于录屏，需要先将sceneFBO转换成recordFBO，保证分辨率统一 -------------------------
+    GLuint recordFBO_;                      // 用于录制的FBO
+    GLuint recordTexID_;                    // 录制FBO绑定的纹理
+    GLuint recordPBOIds_[2] = { 0, 0 };
+    int recordW_ = 1920;                    // 录制的目标宽度
+    int recordH_ = 1080;                    // 录制的目标高度
 
     // ------------------------- 渲染到FBO的texture上的所需数据 -------------------------
     GLSceneManager* pGLSceneManager_ = nullptr;

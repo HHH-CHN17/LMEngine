@@ -48,7 +48,7 @@ private:
 
     std::string             m_filePath;
 
-    bool                    m_bRecording;
+    bool                    isRecording_;
     unsigned long           startTimeStamp;
 
     mutable std::mutex              videoWriterMtx_;
