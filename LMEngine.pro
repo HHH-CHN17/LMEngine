@@ -1,4 +1,4 @@
-QT       += core gui
+QT       += core gui multimedia opengl widgets
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -60,6 +60,7 @@ SOURCES += \
     ./OpenGLWidget/VideoCaptureThread/VideoCaptureThread.cpp \
     ./OpenGLWidget/VideoCaptureThread/YUVDraw/GLYuvDraw.cpp \
     ./AVRecorder/AVRecorder.cpp \
+    ./AVRecorder/AudioCapturer/AudioCapturer.cpp \
     ./Common/Camera/GLCamera.cpp \
     ./Common/ShaderProgram/GLShaderProgram.cpp
 
@@ -77,6 +78,7 @@ INCLUDEPATH += ./OpenGLWidget/SceneManger/Object/Model/Mesh
 INCLUDEPATH += ./OpenGLWidget/SceneManger/Object/SkyBox
 INCLUDEPATH += ./OpenGLWidget/SceneManger/Object/Sun
 INCLUDEPATH += ./AVRecorder
+INCLUDEPATH += ./AVRecorder/AudioCapturer
 
 HEADERS += \
     ./MainWidget.h \
@@ -90,6 +92,7 @@ HEADERS += \
     ./OpenGLWidget/VideoCaptureThread/VideoCaptureThread.h \
     ./OpenGLWidget/VideoCaptureThread/YUVDraw/GLYuvDraw.h \
     ./AVRecorder/AVRecorder.h \
+    ./AVRecorder/AudioCapturer/AudioCapturer.h \
     ./Common/ShaderProgram/GLShaderProgram.h \
     ./Common/Camera/GLCamera.h \
     ./Common/DataDefine.h \

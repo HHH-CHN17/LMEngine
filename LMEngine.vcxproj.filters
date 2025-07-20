@@ -80,6 +80,15 @@
     <Filter Include="Source\Widget\OpenGLWidget\SceneManager\Object\Sun">
       <UniqueIdentifier>{e70fa690-bd32-45a0-b5e3-92d545010318}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Widget\AVRecorder\AudioCapturer">
+      <UniqueIdentifier>{e452d590-3810-47b3-91c9-ac78dcadfed9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Widget\AVRecorder\VideoEncoder">
+      <UniqueIdentifier>{c199c4ca-dbee-4e82-a44e-cf708a8a2bc4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Widget\AVRecorder\AudioEncoder">
+      <UniqueIdentifier>{8b78ceaa-08e1-49f3-bf0b-ed601b1ca4cb}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -124,6 +133,15 @@
     <ClCompile Include="OpenGLWidget\SceneManger\Object\Sun\GLSun.cpp">
       <Filter>Source\Widget\OpenGLWidget\SceneManager\Object\Sun</Filter>
     </ClCompile>
+    <ClCompile Include="AVRecorder\AudioCapturer\AudioCapturer.cpp">
+      <Filter>Source\Widget\AVRecorder\AudioCapturer</Filter>
+    </ClCompile>
+    <ClCompile Include="AVRecorder\AudioEncoder\AudioEncoder.cpp">
+      <Filter>Source\Widget\AVRecorder\AudioEncoder</Filter>
+    </ClCompile>
+    <ClCompile Include="AVRecorder\VideoEncoder\VideoEncoder.cpp">
+      <Filter>Source\Widget\AVRecorder\VideoEncoder</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="MainWidget.h">
@@ -146,6 +164,9 @@
     </QtMoc>
     <QtMoc Include="OpenGLWidget\SceneManger\Object\Sun\GLSun.h">
       <Filter>Source\Widget\OpenGLWidget\SceneManager\Object\Sun</Filter>
+    </QtMoc>
+    <QtMoc Include="AVRecorder\AudioCapturer\AudioCapturer.h">
+      <Filter>Source\Widget\AVRecorder\AudioCapturer</Filter>
     </QtMoc>
   </ItemGroup>
   <ItemGroup>
@@ -190,6 +211,12 @@
     </ClInclude>
     <ClInclude Include="Common\ShaderProgram\GLShaderProgram.h">
       <Filter>Source\Common\ShaderProgram</Filter>
+    </ClInclude>
+    <ClInclude Include="AVRecorder\AudioEncoder\AudioEncoder.h">
+      <Filter>Source\Widget\AVRecorder\AudioEncoder</Filter>
+    </ClInclude>
+    <ClInclude Include="AVRecorder\VideoEncoder\VideoEncoder.h">
+      <Filter>Source\Widget\AVRecorder\VideoEncoder</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -68,7 +68,7 @@
   </PropertyGroup>
   <PropertyGroup Label="QtSettings" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <QtInstall>5.15.2_msvc2019_64</QtInstall>
-    <QtModules>core;gui;widgets</QtModules>
+    <QtModules>core;opengl;gui;multimedia;widgets</QtModules>
   </PropertyGroup>
   <PropertyGroup Label="QtSettings" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <QtInstall>5.15.2_msvc2019_64</QtInstall>
@@ -204,7 +204,10 @@
     </QtUic>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AVRecorder\AudioCapturer\AudioCapturer.cpp" />
+    <ClCompile Include="AVRecorder\AudioEncoder\AudioEncoder.cpp" />
     <ClCompile Include="AVRecorder\AVRecorder.cpp" />
+    <ClCompile Include="AVRecorder\VideoEncoder\VideoEncoder.cpp" />
     <ClCompile Include="Common\Camera\GLCamera.cpp" />
     <ClCompile Include="Common\ShaderProgram\GLShaderProgram.cpp" />
     <ClCompile Include="MainWidget.cpp" />
@@ -250,7 +253,10 @@
     </QtRcc>
   </ItemGroup>
   <ItemGroup>
+    <QtMoc Include="AVRecorder\AudioCapturer\AudioCapturer.h" />
+    <ClInclude Include="AVRecorder\AudioEncoder\AudioEncoder.h" />
     <ClInclude Include="AVRecorder\AVRecorder.h" />
+    <ClInclude Include="AVRecorder\VideoEncoder\VideoEncoder.h" />
     <ClInclude Include="Common\Camera\GLCamera.h" />
     <ClInclude Include="Common\MsgQueue.h" />
     <ClInclude Include="Common\ShaderProgram\GLShaderProgram.h" />

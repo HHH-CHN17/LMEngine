@@ -181,7 +181,7 @@ void OpenGLWidget::initRecordFrameBuffer()
 	// 检查FBO是否完整
 	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	if (status != GL_FRAMEBUFFER_COMPLETE)
-		qDebug() << "ERROR::FRAMEBUFFER:: Framebuffer is not complete: " << hex << status;
+		qDebug() << "ERROR::FRAMEBUFFER:: Framebuffer is not complete: " << Qt::hex << status;
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
@@ -335,7 +335,7 @@ void OpenGLWidget::startRecord()
 	
 	CAVRecorder::GetInstance()->setInputWH(recordW_, recordH_);
 	CAVRecorder::GetInstance()->setOutputWH(640, 480);
-	Q_ASSERT(CAVRecorder::GetInstance()->initOutputFile(pathStr.toUtf8().data()));
+	Q_ASSERT(CAVRecorder::GetInstance()->initMuxer(pathStr.toUtf8().data()));
 
 	isRecording_ = true;
 }
