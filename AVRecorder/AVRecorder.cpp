@@ -18,6 +18,13 @@ CAVRecorder::~CAVRecorder()
     }
 }
 
+CAVRecorder* CAVRecorder::GetInstance()
+{
+    static CAVRecorder objAVRecorder{};
+
+    return &objAVRecorder;
+}
+
 QAudioFormat CAVRecorder::initAudioFormat(const AVConfig& config)
 {
     QAudioFormat audioFormat;
@@ -114,7 +121,6 @@ void CAVRecorder::startRecording()
 {
     if (isRecording_) return;
 
-    audioSamplesEncoded_ = 0;
     audioCapturer_->start(); // ¿ªÊ¼Â¼Òô£¬Ìî³äÒôÆµ»º³åÇø
     isRecording_ = true;
     qInfo() << "Recording started.";

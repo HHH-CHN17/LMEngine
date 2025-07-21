@@ -24,6 +24,7 @@ class CAVRecorder : public QObject
 public:
     explicit CAVRecorder(QObject* parent = nullptr);
     ~CAVRecorder();
+    static CAVRecorder* GetInstance();
 
 public:
     bool initialize(const AVConfig& config);

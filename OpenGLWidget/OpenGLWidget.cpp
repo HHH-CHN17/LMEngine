@@ -332,10 +332,12 @@ void OpenGLWidget::startRecord()
 	QString pathStr = qApp->applicationDirPath() + "/" + dateTime.toString("yyyyMMddhhmmss") + ".mp4";
 	qDebug() << "start record video to: " << pathStr;
 
-	
-	CAVRecorder::GetInstance()->setInputWH(recordW_, recordH_);
-	CAVRecorder::GetInstance()->setOutputWH(640, 480);
-	Q_ASSERT(CAVRecorder::GetInstance()->initMuxer(pathStr.toUtf8().data()));
+	AVConfig config{
+		pathStr.toStdString(),
+		VideoConfig{recordW_, recordH_, 640, 480, 30, 2000000},
+		AudioConfig{48000, 2, 128000}
+	};
+	Q_ASSERT(CAVRecorder::GetInstance()->initialize(config));
 
 	isRecording_ = true;
 }
@@ -407,7 +409,7 @@ void OpenGLWidget::stopRecord()
 {
 	isRecording_ = false;
 
-	CAVRecorder::GetInstance()->stopRecord();
+	CAVRecorder::GetInstance()->startRecording();
 }
 
 void OpenGLWidget::keyPressEvent(QKeyEvent* event)
