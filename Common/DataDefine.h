@@ -6,6 +6,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <libavutil/log.h>
+#include <QDebug>
 
 // ------------------------- YUV渲染所需数据 -------------------------
 #pragma pack(push, 1)
