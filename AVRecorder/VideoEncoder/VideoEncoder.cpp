@@ -1,489 +1,205 @@
-#include "AVRecorder.h"
+#include "VideoEncoder.h"
 #include <chrono>
 #include <QObject>
 #include <QDebug>
 #include <libavutil/log.h>
 #include <stdarg.h> 
 
-static void ffmpeg_log_callback(void* ptr, int level, const char* fmt, va_list vargs)
+CVideoEncoder::CVideoEncoder()
 {
-    // 检查日志级别，我们可以忽略一些过于详细的信息
-    if (level > av_log_get_level())
-        return;
-
-    // 创建一个足够大的缓冲区来存储格式化后的日志消息
-    char message[1024];
-
-    // 使用 vsnprintf 安全地格式化日志内容
-    // FFmpeg 传递的 fmt 格式字符串通常已经包含了像 "[libx264 @ ...]" 这样的上下文信息
-    vsnprintf(message, sizeof(message), fmt, vargs);
-
-    // 去掉消息末尾多余的换行符，因为qDebug会自动添加
-    size_t len = strlen(message);
-    if (len > 0 && message[len - 1] == '\n') {
-        message[len - 1] = '\0';
-    }
-
-    // 根据FFmpeg的日志级别，选择使用Qt的不同输出流
-    switch (level) {
-    case AV_LOG_PANIC:
-    case AV_LOG_FATAL:
-    case AV_LOG_ERROR:
-        qCritical() << "FFmpeg:" << message;
-        break;
-    case AV_LOG_WARNING:
-        qWarning() << "FFmpeg:" << message;
-        break;
-    case AV_LOG_INFO:
-        qInfo() << "FFmpeg:" << message;
-        break;
-    case AV_LOG_VERBOSE:
-    case AV_LOG_DEBUG:
-    case AV_LOG_TRACE:
-        qDebug() << "FFmpeg:" << message;
-        break;
-    default:
-        qDebug() << "FFmpeg (Unknown Level):" << message;
-        break;
-    }
 }
 
-CAVRecorder* CAVRecorder::GetInstance()
+CVideoEncoder::~CVideoEncoder()
 {
-    static CAVRecorder objAVRecorder{};
-
-    return &objAVRecorder;
+    cleanup();
 }
 
-
-CAVRecorder::CAVRecorder()
+bool CVideoEncoder::initialize(const VideoConfig& cfg)
 {
-    // debug用
-    av_log_set_level(AV_LOG_DEBUG);
-    av_log_set_callback(ffmpeg_log_callback);
+    cleanup(); // 清理旧的资源
 
-    av_register_all();
-    avcodec_register_all();
+    inWidth_ = cfg.inWidth;
+    inHeight_ = cfg.inHeight;
+    outWidth_ = cfg.outWidth;
+    outHeight_ = cfg.outHeight;
 
-}
-
-CAVRecorder::~CAVRecorder()
-{
-    
-}
-
-void CAVRecorder::setInputWH(int w, int h)
-{
-    videoInWidth_ = w;
-    videoInHeight_ = h;
-	qDebug() << "setInputWH:" << videoInWidth_ << " " << videoInHeight_;
-}
-
-void CAVRecorder::setOutputWH(int w, int h)
-{
-    videoOutWidth_ = w;
-    videoOutHeight_ = h;
-	qDebug() << "setOutputWH:" << videoOutWidth_ << " " << videoOutHeight_;
-}
-
-bool CAVRecorder::initMuxer(const char* file)
-{
-    freeAll();
-
-    // 1. 初始化复用器上下文
-    avformat_alloc_output_context2(&avFormatCtx_, NULL, NULL, file);
-    if (!avFormatCtx_) {
-	    qDebug() << "avformat_alloc_output_context2 failed";
+    // 1. 查找 H.264 编码器
+    const AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+    if (!codec) {
+        qCritical() << "Video Encoder: H.264 codec not found.";
         return false;
     }
 
-    filePath_ = file;
-
-	// 2. 添加视频流
-    assert(addVideoStream());
-
-	// 3. 添加音频流
-    // todo 添加音频流
-
-    int ret = 0;
-	// 4. 打开输出文件
-    ret = avio_open(&avFormatCtx_->pb, file, AVIO_FLAG_WRITE);
-    if (ret != 0) {
-        avCheckRet("avio_open", ret);
-	    qDebug() << "avio_open failed";
+    // 2. 分配编码器上下文
+    codecCtx_ = avcodec_alloc_context3(codec);
+    if (!codecCtx_) {
+        qCritical() << "Video Encoder: Could not allocate codec context.";
         return false;
     }
 
-	// 5. 写入mp4文件头
-	ret = avformat_write_header(avFormatCtx_, nullptr);
-    if (ret != 0) {
-        avCheckRet("avformat_write_header", ret);
-	    qDebug() << "avformat_write_header failed";
-        return false;
-    }
-    
-    lastPts_ = startTimeStamp_ = getTickCount();
+    // 3. 设置编码器参数
+    codecCtx_->width = outWidth_;
+    codecCtx_->height = outHeight_;
+    codecCtx_->bit_rate = cfg.bitrate;
+    codecCtx_->framerate = { cfg.framerate, 1 };
+    codecCtx_->time_base = { 1, cfg.framerate }; // 时间基与帧率保持一致
+    codecCtx_->gop_size = cfg.framerate; // 设置 GOP 大小，例如1秒一个I帧
+    codecCtx_->max_b_frames = 1;     // 允许B帧以提高压缩率
+    codecCtx_->pix_fmt = AV_PIX_FMT_YUV420P;
+    codecCtx_->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
-    isRecording_ = true;
-    return true;
-}
-
-void CAVRecorder::initVideoCodecParams()
-{
-    videoCodecCtx_->width = videoOutWidth_;
-    videoCodecCtx_->height = videoOutHeight_;
-
-    AVRational time_base;
-    time_base.num = 1; time_base.den = 1000;
-    videoCodecCtx_->time_base = time_base;
-
-    videoCodecCtx_->gop_size = 50;
-    videoCodecCtx_->max_b_frames = 0;
-    videoCodecCtx_->pix_fmt = AV_PIX_FMT_YUV420P;
-    videoCodecCtx_->codec_id = AV_CODEC_ID_H264;
-    av_opt_set(videoCodecCtx_->priv_data, "preset", "superfast", 0);
-    videoCodecCtx_->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-}
-
-bool CAVRecorder::initVideoCodecCtx()
-{
-    if (!avFormatCtx_) {
-        return false;
+    // 设置一些 H.264 的优化选项
+    if (codec->id == AV_CODEC_ID_H264) {
+        av_opt_set(codecCtx_->priv_data, "preset", "ultrafast", 0);
+        av_opt_set(codecCtx_->priv_data, "tune", "zerolatency", 0);
     }
 
-	// 1. 查找视频编码器
-    AVCodec* videoCodec = avcodec_find_encoder(AV_CODEC_ID_H264);
-    if (videoCodec == NULL) {
-        qDebug() << "avcodec_find_encoder failed";
-        return false;
-    }
-
-    // 2. 初始化视频编码器上下文
-    videoCodecCtx_ = avcodec_alloc_context3(videoCodec);
-    if (!videoCodecCtx_) {
-        qDebug() << "avcodec_alloc_context3 failed";
-        return false;
-    }
-
-	// 3. 设置AVCodecParameters的参数
-    initVideoCodecParams();
-
-	// 4. 打开视频编码器
-    // 注意：h.264要求视频宽高必须为偶数
-    int ret = avcodec_open2(videoCodecCtx_, videoCodec, NULL);
-    if (ret != 0) {
+    // 4. 打开编码器
+    int ret = avcodec_open2(codecCtx_, codec, nullptr);
+    if (ret < 0) {
         avCheckRet("avcodec_open2", ret);
-        avcodec_free_context(&videoCodecCtx_);
-        return false;
-    }
-    qDebug() << "avcodec_open2 success...";
-
-    av_dump_format(avFormatCtx_, 0, filePath_.c_str(), 1);
-
-    // 5. 初始化AVPacket
-    videoPkt_ = av_packet_alloc();
-    if (!videoPkt_)
-    {
-        qDebug() << "av_packet_alloc failed";
+        qCritical() << "Video Encoder: Could not open codec.";
+        cleanup();
         return false;
     }
 
-    // 6. 初始化AVFrame
+    // 5. 初始化格式转换上下文 (SwsContext)
+    swsCtx_ = sws_getContext(inWidth_, inHeight_, AV_PIX_FMT_RGBA,
+        outWidth_, outHeight_, AV_PIX_FMT_YUV420P,
+        SWS_BICUBIC, nullptr, nullptr, nullptr);
+    if (!swsCtx_) {
+        qCritical() << "Video Encoder: Could not create SwsContext.";
+        cleanup();
+        return false;
+    }
+
+    // 6. 分配用于存放 YUV 数据的 AVFrame
     yuvFrame_ = av_frame_alloc();
     if (!yuvFrame_) {
-        qDebug() << "Could not allocate video frame";
+        qCritical() << "Video Encoder: Could not allocate YUV frame.";
+        cleanup();
         return false;
     }
     yuvFrame_->format = AV_PIX_FMT_YUV420P;
-    yuvFrame_->width = videoOutWidth_;
-    yuvFrame_->height = videoOutHeight_;
-    yuvFrame_->pts = 0;
-    if (av_frame_get_buffer(yuvFrame_, 0) != 0) {
-        qDebug() << "Could not allocate the video frame data";
+    yuvFrame_->width = outWidth_;
+    yuvFrame_->height = outHeight_;
+    ret = av_frame_get_buffer(yuvFrame_, 0);
+    if (ret < 0) {
+        avCheckRet("av_frame_get_buffer", ret);
+        qCritical() << "Video Encoder: Could not allocate buffer for YUV frame.";
+        cleanup();
         return false;
     }
 
+    ptsCnt_ = 0;
+    qInfo() << "Video Encoder initialized successfully.";
     return true;
 }
 
-bool CAVRecorder::addVideoStream()
+QVector<AVPacket*> CVideoEncoder::encode(const unsigned char* rgbData, int dataSize)
 {
-    // 1. 初始化视频编码器上下文
-	// 该函数需要初始化：videoCodecCtx_, yuvFrame_, videoPkt_
-    assert(initVideoCodecCtx());
-
-    // 2. 添加视频流
-    videoStream_ = avformat_new_stream(avFormatCtx_, nullptr);
-    if (!videoStream_) 
-    {
-        qDebug() << "avformat_new_stream failed";
-        return false;
-    }
-    videoStream_->codecpar->codec_tag = 0;
-    avcodec_parameters_from_context(videoStream_->codecpar, videoCodecCtx_);
-
-    // 3. 初始化视频格式转换上下文
-    videoSwCtx_ = sws_getCachedContext(videoSwCtx_,
-        videoInWidth_, videoInHeight_, AV_PIX_FMT_RGBA,
-        videoOutWidth_, videoOutHeight_, AV_PIX_FMT_YUV420P,
-        SWS_BICUBIC, nullptr, nullptr, nullptr
-    );
-    if (!videoSwCtx_) 
-    {
-        qDebug() << "sws_getCachedContext failed";
-        return false;
+    if (!codecCtx_ || !swsCtx_ || !yuvFrame_) {
+        return QVector<AVPacket*>{};
     }
 
-    return true;
+    // 确保帧数据是可写的
+    if (av_frame_make_writable(yuvFrame_) < 0) {
+        qWarning() << "Video Encoder: YUV frame is not writable.";
+        return QVector<AVPacket*>{};
+    }
+
+    // --- 1. 进行色彩空间转换和缩放 (RGB -> YUV) ---
+    // 注意：这里我们假设输入的RGBA数据是上下颠倒的 (来自OpenGL)
+    const uint8_t* const inData[1] = { rgbData + static_cast<ptrdiff_t>(inWidth_ * (inHeight_ - 1) * 4) }; // 指向最后一行，此时inData[0]存放了rgbData的最后一行数据的地址
+    const int inLinesize[1] = { -inWidth_ * 4 }; // linesize为负，实现垂直翻转
+    sws_scale(swsCtx_, inData, inLinesize, 0, inHeight_, yuvFrame_->data, yuvFrame_->linesize);
+
+    // --- 2. 设置时间戳 (PTS) ---
+    yuvFrame_->pts = ptsCnt_++;
+
+    // --- 3. 调用核心编码函数 ---
+    return doEncode(yuvFrame_);
 }
 
-bool CAVRecorder::addAudioStream()
+QVector<AVPacket*> CVideoEncoder::flush()
 {
-    if (avFormatCtx_ == NULL) {
-        return false;
-    }
-    AVCodec* audioCodec = avcodec_find_encoder(AV_CODEC_ID_AAC);
-    if (audioCodec == NULL) {
-        qDebug() << "avcodec_find_encoder failed";
-        return false;
-    }
-
-    audioCodecCtx_ = avcodec_alloc_context3(audioCodec);
-    if (audioCodecCtx_ == NULL) {
-        qDebug() << " avcodec_alloc_context3 failed";
-        return false;
-    }
-
-    audioCodecCtx_->sample_rate = m_audioOutSamplerate;
-    audioCodecCtx_->sample_fmt = AV_SAMPLE_FMT_FLTP;
-    audioCodecCtx_->channels = m_audioOutChannels;
-    audioCodecCtx_->channel_layout = av_get_default_channel_layout(m_audioOutChannels);
-    audioCodecCtx_->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-
-    if (avcodec_open2(audioCodecCtx_, audioCodec, NULL) != 0) {
-        qDebug() << " avcodec_open2 failed";
-        return false;
-    }
-
-    audioStream_ = avformat_new_stream(avFormatCtx_, NULL);
-    if (audioStream_ == NULL) {
-        qDebug() << " avformat_new_stream failed";
-        return false;
-    }
-
-    audioStream_->codecpar->codec_tag = 0;
-    avcodec_parameters_from_context(audioStream_->codecpar, audioCodecCtx_);
-
-    av_dump_format(avFormatCtx_, 0, filePath_.c_str(), 1);
-
-    return true;
+    qInfo() << "Flushing Video Encoder...";
+    // 传入 NULL frame 来清空编码器
+    return doEncode(nullptr);
 }
 
-void CAVRecorder::stopRecord()
+void CVideoEncoder::setStream(AVStream* stream)
 {
-    isRecording_ = false;
-
-    if (videoCodecCtx_) 
-    {
-		// 发送NULL帧，告诉编码器没有更多的帧了
-        encodeVideo(nullptr);
-    }
-
-    {
-        std::lock_guard<std::mutex> lg{ videoWriterMtx_ };
-        endWriteMp4File();
-        freeAll();
-    }
+    stream_ = stream;
+    /* AVStream的时间基由muxer在avformat_write_header()时自动填入，不应该手动设置
+    if (stream_) {
+        stream_->time_base = codecCtx_->time_base;
+    }*/
 }
 
-bool CAVRecorder::encodeVideo(AVFrame* pFrame)
+QVector<AVPacket*> CVideoEncoder::doEncode(AVFrame* frame)
 {
-    int ret = 0;
-    
-	//编码
-    ret = avcodec_send_frame(videoCodecCtx_, yuvFrame_);
-	if (ret != 0) {
-        avCheckRet("avcodec_send_frame", ret);
-	    return false;
-	}
+    QVector<AVPacket*> packetList;
 
-	// 如果frame的发送顺序是I->B->B->B->P，那么packet的接受顺序是I->P->B->B->B
-	// 这个while循环是为了在向编码器发送P帧后，接受P->B->B->B的包
-    while (ret >= 0)
-    {
-        ret = avcodec_receive_packet(videoCodecCtx_, videoPkt_);
+    // 发送帧到编码器
+    int ret = avcodec_send_frame(codecCtx_, frame);
+    if (ret < 0) {
+        qWarning() << "Video Encoder: Error sending frame to encoder.";
+        return packetList;
+    }
 
-        // 向编码器发送B帧后，返回EAGAIN，表示编码器需要更多输入（即需要P帧）
-		// 向编码器发送NULL后，编码器会循环输出所有剩余的packet，当最后一个packet输出完后再次调用该函数时，返回AVERROR_EOF
+    // 循环接收所有可用的 packet
+    while (ret >= 0) {
+        AVPacket* pkt = av_packet_alloc();
+        if (!pkt) {
+            qCritical() << "Video Encoder: Could not allocate AVPacket.";
+            break;
+        }
+
+        ret = avcodec_receive_packet(codecCtx_, pkt);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) 
         {
-            av_packet_unref(videoPkt_); 
-            return true;
+            av_packet_unref(pkt);
+            av_packet_free(&pkt); // 没有packet产出，释放分配的内存
+            break; // 正常退出
         }
-        else if (ret < 0 || videoPkt_->size <= 0) 
+        else if (ret < 0) 
         {
             avCheckRet("avcodec_receive_packet", ret);
-            av_packet_unref(videoPkt_);
-            return false;
+            qWarning() << "Video Encoder: Error receiving packet from encoder.";
+            av_packet_unref(pkt);
+            av_packet_free(&pkt);
+            break; // 发生错误，退出
         }
 
-        // 时间基转换
-        av_packet_rescale_ts(videoPkt_, videoCodecCtx_->time_base, videoStream_->time_base);
+        // 设置每一个pkt的时间基和stream_index
+        if (stream_) {
+            av_packet_rescale_ts(pkt, codecCtx_->time_base, stream_->time_base);
+            pkt->stream_index = stream_->index;
+        }
+        else
+        {
+            qWarning() << "Video Encoder: No Stream.";
+        }
 
-        videoPkt_->stream_index = videoStream_->index;
-
-        writeFrame(videoPkt_);
-
-        av_packet_unref(videoPkt_);
+        packetList.append(pkt);
     }
-
-    return true;
+    return packetList;
 }
 
-bool CAVRecorder::recording(const unsigned char* rgbData)
+void CVideoEncoder::cleanup()
 {
-    assert(isRecording_);
-    assert(avFormatCtx_ || videoSwCtx_ || yuvFrame_);
-    assert(rgbData);
-
-    uint8_t* indata[AV_NUM_DATA_POINTERS] = { nullptr };
-    indata[0] = const_cast<uint8_t*>(rgbData);
-
-    int insize[AV_NUM_DATA_POINTERS] = { 0 };
-    insize[0] = videoInWidth_ * 4;
-
-    int ret = 0;
-    ret = av_frame_make_writable(yuvFrame_);
-    if (ret < 0)
-    {
-        avCheckRet("av_frame_make_writable", ret);
-        return false;
+    if (codecCtx_) {
+        avcodec_free_context(&codecCtx_);
+        codecCtx_ = nullptr;
     }
-
-    ret = sws_scale(videoSwCtx_, indata, insize, 0, videoInHeight_, yuvFrame_->data, yuvFrame_->linesize);
-    if (ret < 0) 
-    {
-        avCheckRet("sws_scale", ret);
-        return false;
-    }
-
-    //解码出来是倒置的，这里把yuv做一个转换.
-    yuvFrame_->data[0] += static_cast<ptrdiff_t>(yuvFrame_->linesize[0] * (videoCodecCtx_->height - 1));
-    yuvFrame_->linesize[0] *= -1;
-    yuvFrame_->data[1] += static_cast<ptrdiff_t>(yuvFrame_->linesize[1] * (videoCodecCtx_->height / 2 - 1));
-    yuvFrame_->linesize[1] *= -1;
-    yuvFrame_->data[2] += static_cast<ptrdiff_t>(yuvFrame_->linesize[2] * (videoCodecCtx_->height / 2 - 1));
-    yuvFrame_->linesize[2] *= -1;
-
-    long long currentPts = getTickCount() - startTimeStamp_;
-    if (currentPts - lastPts_ <= 0) {
-        currentPts = currentPts + 1;
-    }
-    yuvFrame_->pts = currentPts;
-
-    lastPts_ = currentPts;
-
-    assert(encodeVideo(yuvFrame_));
-
-    return true;
-}
-
-bool CAVRecorder::writeFrame(AVPacket* packet)
-{
-    if (isRecording_ == false) {
-        return false;
-    }
-
-    if (packet == NULL) {
-        return false;
-    }
-
-    if (packet->data == NULL) {
-        return false;
-    }
-
-    if (avFormatCtx_ == NULL || packet == NULL || packet->size <= 0) {
-        return false;
-    }
-    int retValue = 0;
-    {
-        std::lock_guard<std::mutex> lg{ videoWriterMtx_ };
-        retValue = av_interleaved_write_frame(avFormatCtx_, packet);
-    }
-    if (retValue != 0) {
-	    qDebug() << "av_interleaved_write_frame failed :" << retValue;
-        return false;
-    }
-
-    return true;
-}
-
-bool CAVRecorder::endWriteMp4File()
-{
-    if (avFormatCtx_ == NULL) {
-        return false;
-    }
-    if (avFormatCtx_->pb == NULL) {
-        return false;
-    }
-
-    if (av_write_trailer(avFormatCtx_) != 0) {
-	    qDebug() << "av_write_trailer failed";
-        return false;
-    }
-
-    if (avio_closep(&avFormatCtx_->pb) != 0) {
-	    qDebug() << "avio_close failed";
-        return false;
-    }
-
-    qDebug() << "endWriteMp4File success...";
-    return true;
-
-}
-
-void CAVRecorder::freeAll()
-{
-    if (videoCodecCtx_) {
-        avcodec_free_context(&videoCodecCtx_);
-        videoCodecCtx_ = nullptr;
-    }
-
-    if (audioCodecCtx_) {
-        avcodec_free_context(&audioCodecCtx_);
-        audioCodecCtx_ = nullptr;
-    }
-
-    if (videoSwCtx_) {
-        sws_freeContext(videoSwCtx_);
-        videoSwCtx_ = nullptr;
-    }
-
-    if (videoPkt_) {
-        av_packet_free(&videoPkt_);
-        videoPkt_ = nullptr;
-    }
-
     if (yuvFrame_) {
         av_frame_free(&yuvFrame_);
         yuvFrame_ = nullptr;
     }
-
-    if (avFormatCtx_) {
-        avformat_close_input(&avFormatCtx_);
-        avFormatCtx_ = nullptr;
+    if (swsCtx_) {
+        sws_freeContext(swsCtx_);
+        swsCtx_ = nullptr;
     }
-}
-
-long long CAVRecorder::getTickCount() {
-    auto now = std::chrono::system_clock::now();
-    auto duration = now.time_since_epoch();
-    return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-}
-
-void CAVRecorder::avCheckRet(const char* operate, int ret)
-{
-    char err_buf[AV_ERROR_MAX_STRING_SIZE] = { 0 };
-    av_strerror(ret, err_buf, AV_ERROR_MAX_STRING_SIZE);
-    qDebug() << operate << " failed: " << err_buf << " (error code: " << ret << ")";
+    stream_ = nullptr;
 }

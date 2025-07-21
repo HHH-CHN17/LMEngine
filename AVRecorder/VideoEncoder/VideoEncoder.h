@@ -7,95 +7,67 @@ extern "C" {
 #include <libswscale/swscale.h>
 #include <libavutil/opt.h>
 }
-#include <iostream>
+#include <QVector>
 #include <mutex>
 #include "AVRecorder/AudioCapturer/AudioCapturer.h"
+#include "Common/DataDefine.h"
 
-class CAVRecorder
+class CVideoEncoder
 {
 public:
-    CAVRecorder();
-    virtual ~CAVRecorder();
-    static CAVRecorder* GetInstance();
+    CVideoEncoder();
+    ~CVideoEncoder();
+
+    // 禁止拷贝和赋值
+    CVideoEncoder(const CVideoEncoder&) = delete;
+    CVideoEncoder& operator=(const CVideoEncoder&) = delete;
 
 public:
-    // ------------------------- 初始化容器 -------------------------
-    // 开始录制时的初始化函数
-    void setInputWH(int w, int h);
-    void setOutputWH(int w, int h);
-    bool initMuxer(const char* file);
+    // 初始化视频编码器
+    bool initialize(const VideoConfig& cfg);
 
-    // ------------------------- 录制（每个渲染循环中需调用的函数，用于设置每一帧的数据） -------------------------
-    bool recording(const unsigned char* rgb);
-	// 编码音视频帧
-    bool encodeVideo(AVFrame* pFrame);
-    bool encodeAudio(AVFrame* pFrame);
+    /**
+     * @brief 编码一帧视频数据。
+     * @param rgbData 指向原始RGBA数据的指针（大小必须是 inWidth * inHeight * 4）。
+     * @param dataSize 数据的大小（可选，用于验证）。
+     * @return 返回一个包含零个或多个编码好的 AVPacket 的列表。
+     *         调用者在使用完 packet 后必须负责调用 av_packet_free() 来释放它们。
+     */
+    QVector<AVPacket*> encode(const unsigned char* rgbData, int dataSize);
 
-    // ------------------------- 结束录制 -------------------------
-    void stopRecord();
+    // 清空编码器中所有缓存的packet
+    QVector<AVPacket*> flush();
 
-private:
-    // ------------------------- 初始化视频流 -------------------------
-    bool addVideoStream();
-    // 1. 初始化视频编码器上下文，需要初始化视频编码相关成员
-    bool initVideoCodecCtx();
-	// 2. 初始化视频参数，该这些参数会用于AVStream和AVCodecContext
-    void initVideoCodecParams();
+    /**
+     * @brief 设置此编码器关联的 AVStream。
+     *        Muxer 创建 stream 后，必须调用此函数将 stream 信息传递进来。
+     * @param stream Muxer 创建的视频流。
+     */
+    void setStream(AVStream* stream);
 
-    // ------------------------- 初始化音频流 -------------------------
-    bool addAudioStream();
-    // 初始化音频编码器上下文，需要初始化音频编码相关成员
-    bool initAudioCodectx();
-    // 写入音视频帧
-    bool writeFrame(AVPacket* packet);
-
-    // ------------------------- 结束录制 -------------------------
-    bool endWriteMp4File();
-    void freeAll();
-
-
-    void avCheckRet(const char* operate, int ret);
-    long long getTickCount();
+    // 提供对编码器上下文的只读访问，以便 Muxer 可以从中获取参数
+    const AVCodecContext* getCodecContext() const { return codecCtx_; }
 
 private:
-    // Muxer: 音视频封装
-    AVFormatContext* avFormatCtx_ = nullptr;
-    AVStream* videoStream_ = nullptr;
-    AVStream* audioStream_ = nullptr;
+    // 内部核心编码函数
+    QVector<AVPacket*> doEncode(AVFrame* frame);
 
-    // 视频格式转换
-    SwsContext* videoSwCtx_ = nullptr;
+    // 清理所有资源
+    void cleanup();
 
-    // 视频编码相关
-    AVCodecContext* videoCodecCtx_ = nullptr;
-    AVFrame* yuvFrame_ = nullptr;   // RGB-->YUV
-    AVPacket* videoPkt_ = nullptr;  // YUV-->H.264
+private:
+    AVCodecContext* codecCtx_ = nullptr;
+    AVFrame* yuvFrame_ = nullptr;   // 用于存放转换后的 YUV 数据
+    SwsContext* swsCtx_ = nullptr;    // 用于 RGB -> YUV 的转换
 
-	// 音频编码相关
-    AVCodecContext* audioCodecCtx_ = nullptr;
-    AVFrame* audioFrame_ = nullptr; // PCM-->AAC
-    AVPacket* audioPkt_ = nullptr;
+    AVStream* stream_ = nullptr; // Muxer 创建的视频流
 
-    // 视频参数
-    mutable std::mutex videoWriterMtx_;
-    int videoInWidth_ = 0;
-    int videoInHeight_ = 0;
-    int videoOutWidth_ = 0;
-    int videoOutHeight_ = 0;
+    // 编码参数
+    int inWidth_ = 0;
+    int inHeight_ = 0;
+    int outWidth_ = 0;
+    int outHeight_ = 0;
 
-	// 音频参数
-    int m_audioInSamplerate = 44100;
-	int m_audioInChannels = 1;
-    int m_audioOutSamplerate = 44100;
-	int m_audioOutChannels = 1;
-    int m_audioOutBitrate = 64000;
-
-    // 其余参数
-    std::string     filePath_{};
-    bool            isRecording_ = false;
-    long long       startTimeStamp_ = 0;
-
-    long long       lastPts_ = 0;
-
-
+    // 用于计算PTS
+    int64_t ptsCnt_ = 0;
 };

@@ -89,6 +89,9 @@
     <Filter Include="Source\Widget\AVRecorder\AudioEncoder">
       <UniqueIdentifier>{8b78ceaa-08e1-49f3-bf0b-ed601b1ca4cb}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Widget\AVRecorder\Muxer">
+      <UniqueIdentifier>{b19ebeea-7561-48b3-bcd8-87dc0c076e1c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -142,6 +145,9 @@
     <ClCompile Include="AVRecorder\VideoEncoder\VideoEncoder.cpp">
       <Filter>Source\Widget\AVRecorder\VideoEncoder</Filter>
     </ClCompile>
+    <ClCompile Include="AVRecorder\Muxer\Muxer.cpp">
+      <Filter>Source\Widget\AVRecorder\Muxer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="MainWidget.h">
@@ -167,6 +173,9 @@
     </QtMoc>
     <QtMoc Include="AVRecorder\AudioCapturer\AudioCapturer.h">
       <Filter>Source\Widget\AVRecorder\AudioCapturer</Filter>
+    </QtMoc>
+    <QtMoc Include="AVRecorder\AVRecorder.h">
+      <Filter>Source\Widget\AVRecorder</Filter>
     </QtMoc>
   </ItemGroup>
   <ItemGroup>
@@ -203,9 +212,6 @@
     <ClInclude Include="OpenGLWidget\SceneManger\Object\SkyBox\GLSkyBox.h">
       <Filter>Source\Widget\OpenGLWidget\SceneManager\Object\SkyBox</Filter>
     </ClInclude>
-    <ClInclude Include="AVRecorder\AVRecorder.h">
-      <Filter>Source\Widget\AVRecorder</Filter>
-    </ClInclude>
     <ClInclude Include="Common\Camera\GLCamera.h">
       <Filter>Source\Common\Camera</Filter>
     </ClInclude>
@@ -217,6 +223,9 @@
     </ClInclude>
     <ClInclude Include="AVRecorder\VideoEncoder\VideoEncoder.h">
       <Filter>Source\Widget\AVRecorder\VideoEncoder</Filter>
+    </ClInclude>
+    <ClInclude Include="AVRecorder\Muxer\Muxer.h">
+      <Filter>Source\Widget\AVRecorder\Muxer</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -6,96 +6,81 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libswscale/swscale.h>
 #include <libavutil/opt.h>
+#include <libavutil/channel_layout.h>
+#include <libavutil/avutil.h>
+#include <libavutil/common.h>
+#include <libavutil/frame.h>
+#include <libavutil/samplefmt.h>
+#include <libswresample/swresample.h>
 }
 #include <iostream>
 #include <mutex>
 #include "AVRecorder/AudioCapturer/AudioCapturer.h"
 
-class CAVRecorder
+class CAudioEncoder
 {
 public:
-    CAVRecorder();
-    virtual ~CAVRecorder();
-    static CAVRecorder* GetInstance();
+    CAudioEncoder();
+    ~CAudioEncoder();
 
-public:
-    // ------------------------- 初始化容器 -------------------------
-    // 开始录制时的初始化函数
-    void setInputWH(int w, int h);
-    void setOutputWH(int w, int h);
-    bool initMuxer(const char* file);
+    // 禁止拷贝和赋值
+    CAudioEncoder(const CAudioEncoder&) = delete;
+    CAudioEncoder& operator=(const CAudioEncoder&) = delete;
 
-    // ------------------------- 录制（每个渲染循环中需调用的函数，用于设置每一帧的数据） -------------------------
-    bool recording(const unsigned char* rgb);
-	// 编码音视频帧
-    bool encodeVideo(AVFrame* pFrame);
-    bool encodeAudio(AVFrame* pFrame);
+    /**
+     * @brief 初始化音频编码器。
+     * @param sampleRate 采样率 (e.g., 48000)。
+     * @param channels 声道数 (e.g., 2 for stereo)。
+     * @param bitrate 音频比特率 (e.g., 128000)。
+     * @return 成功返回 true。
+     */
+    bool initialize(int sampleRate, int channels, long long bitrate);
 
-    // ------------------------- 结束录制 -------------------------
-    void stopRecord();
+    /**
+     * @brief 编码一帧音频数据。
+     * @param pcmData 指向原始 S16 (交错格式) PCM 数据的指针。
+     * @param dataSize 数据的大小（字节）。
+     * @return 返回一个包含零个或多个编码好的 AVPacket 的列表。
+     *         调用者在使用完 packet 后必须负责调用 av_packet_free() 来释放它们。
+     */
+    QVector<AVPacket*> encode(const unsigned char* pcmData, int dataSize);
+
+    /**
+     * @brief 清空编码器中所有缓存的帧。
+     * @return 返回一个包含所有剩余 AVPacket 的列表。
+     */
+    QVector<AVPacket*> flush();
+
+    /**
+     * @brief 设置此编码器关联的 AVStream。
+     * @param stream Muxer 创建的音频流。
+     */
+    void setStream(AVStream* stream);
+
+    // 提供对编码器上下文的只读访问
+    const AVCodecContext* getCodecContext() const { return codecCtx_; }
+
+    // 获取编码器期望的每帧样本数
+    int getFrameSize() const;
+
+    // 获取编码器期望的每帧字节数 (对于 S16_PACKED 格式)
+    int getBytesPerFrame() const;
 
 private:
-    // ------------------------- 初始化视频流 -------------------------
-    bool addVideoStream();
-    // 1. 初始化视频编码器上下文，需要初始化视频编码相关成员
-    bool initVideoCodecCtx();
-	// 2. 初始化视频参数，该这些参数会用于AVStream和AVCodecContext
-    void initVideoCodecParams();
+    // 内部核心编码函数
+    QVector<AVPacket*> doEncode(AVFrame* frame);
 
-    // ------------------------- 初始化音频流 -------------------------
-    bool addAudioStream();
-    // 初始化音频编码器上下文，需要初始化音频编码相关成员
-    bool initAudioCodectx();
-    // 写入音视频帧
-    bool writeFrame(AVPacket* packet);
-
-    // ------------------------- 结束录制 -------------------------
-    bool endWriteMp4File();
-    void freeAll();
-
-
-    void avCheckRet(const char* operate, int ret);
-    long long getTickCount();
+    // 清理所有资源
+    void cleanup();
 
 private:
-    // Muxer: 音视频封装
-    AVFormatContext* avFormatCtx_ = nullptr;
-    AVStream* videoStream_ = nullptr;
-    AVStream* audioStream_ = nullptr;
+    AVCodecContext* codecCtx_ = nullptr;
+    AVFrame* pcmFrame_ = nullptr;   // 用于存放待编码的 S16 Packed PCM 数据
+    AVFrame* resampleFrame_ = nullptr; // 用于存放重采样后的 FLTP Planar 数据 (如果需要)
+    SwrContext* swrCtx_ = nullptr;    // 用于 PCM 格式和采样率的转换
 
-    // 视频格式转换
-    SwsContext* videoSwCtx_ = nullptr;
+    AVStream* stream_ = nullptr; // Muxer 创建的音频流
 
-    // 视频编码相关
-    AVCodecContext* videoCodecCtx_ = nullptr;
-    AVFrame* yuvFrame_ = nullptr;   // RGB-->YUV
-    AVPacket* videoPkt_ = nullptr;  // YUV-->H.264
-
-	// 音频编码相关
-    AVCodecContext* audioCodecCtx_ = nullptr;
-    AVFrame* audioFrame_ = nullptr; // PCM-->AAC
-    AVPacket* audioPkt_ = nullptr;
-
-    // 视频参数
-    mutable std::mutex videoWriterMtx_;
-    int videoInWidth_ = 0;
-    int videoInHeight_ = 0;
-    int videoOutWidth_ = 0;
-    int videoOutHeight_ = 0;
-
-	// 音频参数
-    int m_audioInSamplerate = 44100;
-	int m_audioInChannels = 1;
-    int m_audioOutSamplerate = 44100;
-	int m_audioOutChannels = 1;
-    int m_audioOutBitrate = 64000;
-
-    // 其余参数
-    std::string     filePath_{};
-    bool            isRecording_ = false;
-    long long       startTimeStamp_ = 0;
-
-    long long       lastPts_ = 0;
-
-
+    // 用于计算PTS
+    int64_t ptsCnt_ = 0;
 };

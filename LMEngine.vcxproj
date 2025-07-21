@@ -207,6 +207,7 @@
     <ClCompile Include="AVRecorder\AudioCapturer\AudioCapturer.cpp" />
     <ClCompile Include="AVRecorder\AudioEncoder\AudioEncoder.cpp" />
     <ClCompile Include="AVRecorder\AVRecorder.cpp" />
+    <ClCompile Include="AVRecorder\Muxer\Muxer.cpp" />
     <ClCompile Include="AVRecorder\VideoEncoder\VideoEncoder.cpp" />
     <ClCompile Include="Common\Camera\GLCamera.cpp" />
     <ClCompile Include="Common\ShaderProgram\GLShaderProgram.cpp" />
@@ -255,7 +256,8 @@
   <ItemGroup>
     <QtMoc Include="AVRecorder\AudioCapturer\AudioCapturer.h" />
     <ClInclude Include="AVRecorder\AudioEncoder\AudioEncoder.h" />
-    <ClInclude Include="AVRecorder\AVRecorder.h" />
+    <QtMoc Include="AVRecorder\AVRecorder.h" />
+    <ClInclude Include="AVRecorder\Muxer\Muxer.h" />
     <ClInclude Include="AVRecorder\VideoEncoder\VideoEncoder.h" />
     <ClInclude Include="Common\Camera\GLCamera.h" />
     <ClInclude Include="Common\MsgQueue.h" />

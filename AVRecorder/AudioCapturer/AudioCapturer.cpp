@@ -46,13 +46,13 @@ bool CAudioCapturer::initialize(const QAudioFormat& format)
     }
 
     // 连接状态变化信号，用于调试
-    connect(audioInput_.data(), &QAudioInput::stateChanged, this, &CAudioCapturer::handleStateChanged);
+    connect(audioInput_.data(), &QAudioInput::stateChanged, this, &CAudioCapturer::slot_StateChanged);
 
     isInitialized_ = true;
-    qInfo() << "Audio capturer initialized successfully with format:";
-    qInfo() << "Sample Rate:" << format_.sampleRate();
-    qInfo() << "Channels:" << format_.channelCount();
-    qInfo() << "Sample Format:" << format_.sampleType(); // 使用 sampleFormatName() 获取名称
+    qInfo() << "Audio capturer initialized successfully with format:\n"
+			<< "Sample Rate:" << format_.sampleRate() << "\n"
+			<< "Channels:" << format_.channelCount() << "\n"
+			<< "Sample Format:" << format_.sampleType(); // 使用 sampleFormatName() 获取名称
 
     return true;
 }
@@ -77,18 +77,7 @@ void CAudioCapturer::start()
         if (audioDevice_) {
             // 连接这个 IO 设备的 readyRead 信号
             // 这个槽函数负责从 audioDevice_ 读取数据并放入 buffer_
-            connect(audioDevice_, &QIODevice::readyRead, this, [this]() {
-                if (!audioDevice_) return;
-
-                const qint64 bytesAvailable = audioDevice_->bytesAvailable();
-                if (bytesAvailable <= 0) return;
-
-                QByteArray newData = audioDevice_->read(bytesAvailable);
-                if (newData.isEmpty()) return;
-
-                QMutexLocker locker(&mtx_);
-                buffer_.append(newData);
-                });
+            connect(audioDevice_, &QIODevice::readyRead, this, CAudioCapturer::slot_ReadPCM);
             qInfo() << "Audio capture started.";
         }
         else {
@@ -97,10 +86,27 @@ void CAudioCapturer::start()
     }
 }
 
+void CAudioCapturer::slot_ReadPCM()
+{
+    if (!audioDevice_) return;
+
+    const qint64 bytesAvailable = audioDevice_->bytesAvailable();
+    if (bytesAvailable <= 0) return;
+
+    QByteArray newData = audioDevice_->read(bytesAvailable);
+    if (newData.isEmpty()) return;
+
+    QMutexLocker locker(&mtx_);
+    buffer_.append(newData);
+}
+
 void CAudioCapturer::stop()
 {
-    if (audioInput_ && audioInput_->state() != QAudio::StoppedState) {
+    if (audioInput_ && audioInput_->state() != QAudio::StoppedState) 
+    {
         audioInput_->stop();
+        disconnect(audioInput_.data(), &QAudioInput::stateChanged, this, &CAudioCapturer::slot_StateChanged);
+        disconnect(audioDevice_, &QIODevice::readyRead, this, CAudioCapturer::slot_ReadPCM);
         // audioDevice_ 会在 QAudioInput 停止时自动变为无效，不需要手动断开连接或删除
         audioDevice_ = nullptr;
         qInfo() << "Audio capture stopped.";
@@ -122,7 +128,7 @@ QAudioFormat CAudioCapturer::getAudioFormat() const
     return format_;
 }
 
-void CAudioCapturer::handleStateChanged(QAudio::State newState)
+void CAudioCapturer::slot_StateChanged(QAudio::State newState)
 {
     // 这个槽主要用于调试，可以观察音频设备的状态变化
     qDebug() << "QAudioInput state changed to:" << newState;
