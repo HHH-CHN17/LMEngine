@@ -2,6 +2,56 @@
 #include <QDebug>
 #include <qguiapplication.h>
 
+static void ffmpeg_log_callback(void* ptr, int level, const char* fmt, va_list vargs)
+{
+    // 检查日志级别，我们可以忽略一些过于详细的信息
+    if (level > av_log_get_level())
+        return;
+
+    // 创建一个足够大的缓冲区来存储格式化后的日志消息
+    char message[1024];
+
+    // 使用 vsnprintf 安全地格式化日志内容
+    // FFmpeg 传递的 fmt 格式字符串通常已经包含了像 "[libx264 @ ...]" 这样的上下文信息
+    vsnprintf(message, sizeof(message), fmt, vargs);
+
+    // 去掉消息末尾多余的换行符，因为qDebug会自动添加
+    size_t len = strlen(message);
+    if (len > 0 && message[len - 1] == '\n') {
+        message[len - 1] = '\0';
+    }
+
+    // 根据FFmpeg的日志级别，选择使用Qt的不同输出流
+    switch (level) {
+    case AV_LOG_PANIC:
+    case AV_LOG_FATAL:
+    case AV_LOG_ERROR:
+        qCritical() << "FFmpeg:" << message;
+        break;
+    case AV_LOG_WARNING:
+        qWarning() << "FFmpeg:" << message;
+        break;
+    case AV_LOG_INFO:
+        qInfo() << "FFmpeg:" << message;
+        break;
+    case AV_LOG_VERBOSE:
+    case AV_LOG_DEBUG:
+    case AV_LOG_TRACE:
+        qDebug() << "FFmpeg:" << message;
+        break;
+    default:
+        qDebug() << "FFmpeg (Unknown Level):" << message;
+        break;
+    }
+}
+
+static void avCheckRet(const char* operate, int ret)
+{
+    char err_buf[AV_ERROR_MAX_STRING_SIZE] = { 0 };
+    av_strerror(ret, err_buf, AV_ERROR_MAX_STRING_SIZE);
+    qCritical() << operate << " failed: " << err_buf << " (error code: " << ret << ")";
+}
+
 
 CAVRecorder::CAVRecorder(QObject* parent)
     : QObject(parent)
@@ -164,11 +214,11 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
 
     // ------------------------- 视频编码 -------------------------
     // 1. 视频可以直接编码
-    QVector<AVPacket*> videoPackets = videoEncoder_->encode(rgbData, config_.videoCfg.inWidth * config_.videoCfg.inHeight * 4);
+    QVector<AVPacket*> videoPackets = videoEncoder_->encode(rgbData);
     for (AVPacket* pkt : videoPackets) 
     {
         muxer_->writePacket(pkt);
-        av_packet_unref(pkt);
+        //av_packet_unref(pkt);
         av_packet_free(&pkt);
     }
 
@@ -192,9 +242,13 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
         }
 
         // 2. 音频需要先获取PCM，再编码
-        QVector<AVPacket*> audioPackets = audioEncoder_->encode(reinterpret_cast<const uint8_t*>(pcmChunk.constData()), pcmChunk.size());
+        QVector<AVPacket*> audioPackets = audioEncoder_->encode(reinterpret_cast<const uint8_t*>(pcmChunk.constData()));
         for (AVPacket* pkt : audioPackets) 
         {
+            qDebug() << "Muxer: Writing packet for stream index" << pkt->stream_index
+                << "size:" << pkt->size
+                << "pts:" << pkt->pts
+                << "dts:" << pkt->dts;
             muxer_->writePacket(pkt);
             av_packet_unref(pkt);
             av_packet_free(&pkt);

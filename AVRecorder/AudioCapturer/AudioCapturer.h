@@ -33,6 +33,9 @@ public:
     // 获取最终确定的音频格式
     QAudioFormat getAudioFormat() const;
 
+private:
+    QAudioDeviceInfo getDevice(const char* deviceName);
+
 private slots:
     // QAudioInput 的状态变化时调用
     void slot_StateChanged(QAudio::State newState);

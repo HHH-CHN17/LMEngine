@@ -5,6 +5,57 @@
 #include <libavutil/log.h>
 #include <stdarg.h> 
 
+static void ffmpeg_log_callback(void* ptr, int level, const char* fmt, va_list vargs)
+{
+    // 检查日志级别，我们可以忽略一些过于详细的信息
+    if (level > av_log_get_level())
+        return;
+
+    // 创建一个足够大的缓冲区来存储格式化后的日志消息
+    char message[1024];
+
+    // 使用 vsnprintf 安全地格式化日志内容
+    // FFmpeg 传递的 fmt 格式字符串通常已经包含了像 "[libx264 @ ...]" 这样的上下文信息
+    vsnprintf(message, sizeof(message), fmt, vargs);
+
+    // 去掉消息末尾多余的换行符，因为qDebug会自动添加
+    size_t len = strlen(message);
+    if (len > 0 && message[len - 1] == '\n') {
+        message[len - 1] = '\0';
+    }
+
+    // 根据FFmpeg的日志级别，选择使用Qt的不同输出流
+    switch (level) {
+    case AV_LOG_PANIC:
+    case AV_LOG_FATAL:
+    case AV_LOG_ERROR:
+        qCritical() << "FFmpeg:" << message;
+        break;
+    case AV_LOG_WARNING:
+        qWarning() << "FFmpeg:" << message;
+        break;
+    case AV_LOG_INFO:
+        qInfo() << "FFmpeg:" << message;
+        break;
+    case AV_LOG_VERBOSE:
+    case AV_LOG_DEBUG:
+    case AV_LOG_TRACE:
+        qDebug() << "FFmpeg:" << message;
+        break;
+    default:
+        qDebug() << "FFmpeg (Unknown Level):" << message;
+        break;
+    }
+}
+
+static void avCheckRet(const char* operate, int ret)
+{
+    char err_buf[AV_ERROR_MAX_STRING_SIZE] = { 0 };
+    av_strerror(ret, err_buf, AV_ERROR_MAX_STRING_SIZE);
+    qCritical() << operate << " failed: " << err_buf << " (error code: " << ret << ")";
+}
+
+
 CVideoEncoder::CVideoEncoder()
 {
 }
@@ -40,13 +91,14 @@ bool CVideoEncoder::initialize(const VideoConfig& cfg)
     // 3. 设置编码器参数
     codecCtx_->width = outWidth_;
     codecCtx_->height = outHeight_;
-    codecCtx_->bit_rate = cfg.bitrate;
+    //codecCtx_->bit_rate = cfg.bitrate;
     codecCtx_->framerate = { cfg.framerate, 1 };
     codecCtx_->time_base = { 1, cfg.framerate }; // 时间基与帧率保持一致
     codecCtx_->gop_size = cfg.framerate; // 设置 GOP 大小，例如1秒一个I帧
     codecCtx_->max_b_frames = 1;     // 允许B帧以提高压缩率
     codecCtx_->pix_fmt = AV_PIX_FMT_YUV420P;
     codecCtx_->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    codecCtx_->codec_id = AV_CODEC_ID_H264;
 
     // 设置一些 H.264 的优化选项
     if (codec->id == AV_CODEC_ID_H264) {
@@ -96,7 +148,7 @@ bool CVideoEncoder::initialize(const VideoConfig& cfg)
     return true;
 }
 
-QVector<AVPacket*> CVideoEncoder::encode(const unsigned char* rgbData, int dataSize)
+QVector<AVPacket*> CVideoEncoder::encode(const unsigned char* rgbData)
 {
     if (!codecCtx_ || !swsCtx_ || !yuvFrame_) {
         return QVector<AVPacket*>{};
@@ -182,7 +234,7 @@ QVector<AVPacket*> CVideoEncoder::doEncode(AVFrame* frame)
             qWarning() << "Video Encoder: No Stream.";
         }
 
-        packetList.append(pkt);
+        packetList.push_back(pkt);
     }
     return packetList;
 }

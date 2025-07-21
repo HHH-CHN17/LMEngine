@@ -29,11 +29,10 @@ public:
     /**
      * @brief 编码一帧视频数据。
      * @param rgbData 指向原始RGBA数据的指针（大小必须是 inWidth * inHeight * 4）。
-     * @param dataSize 数据的大小（可选，用于验证）。
      * @return 返回一个包含零个或多个编码好的 AVPacket 的列表。
      *         调用者在使用完 packet 后必须负责调用 av_packet_free() 来释放它们。
      */
-    QVector<AVPacket*> encode(const unsigned char* rgbData, int dataSize);
+    QVector<AVPacket*> encode(const unsigned char* rgbData);
 
     // 清空编码器中所有缓存的packet
     QVector<AVPacket*> flush();

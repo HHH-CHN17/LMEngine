@@ -12,25 +12,51 @@ CAudioCapturer::~CAudioCapturer()
     stop();
 }
 
+QAudioDeviceInfo CAudioCapturer::getDevice(const char* deviceName)
+{
+    QString expect = QString::fromUtf8(deviceName);
+    QAudioDeviceInfo targetDevice{};
+
+    // 2. 查找所有可用的输入设备
+    const QList<QAudioDeviceInfo> devices = QAudioDeviceInfo::availableDevices(QAudio::AudioInput);
+    bool deviceFound = false;
+    for (const QAudioDeviceInfo& deviceInfo : devices) {
+        if (deviceInfo.deviceName() == expect) {
+            targetDevice = deviceInfo;
+            deviceFound = true;
+            qInfo() << "Found target audio device:" << expect;
+            break;
+        }
+    }
+    if (!deviceFound)
+    {
+    	qWarning() << "Could not find target device'" << expect << "'. Falling back to default device.";
+        targetDevice = QAudioDeviceInfo::defaultInputDevice();
+    }
+
+    return targetDevice;
+}
+
 bool CAudioCapturer::initialize(const QAudioFormat& format)
 {
     if (isInitialized_) {
         qWarning() << "Audio capturer already initialized.";
         return true;
     }
+    
 
     format_ = format;
     // 获取默认输入设备信息
-    const QAudioDeviceInfo defaultDevice = QAudioDeviceInfo::defaultInputDevice();
-    if (defaultDevice.isNull()) {
+    const QAudioDeviceInfo device = getDevice("Main Mic (Razer Seiren Mini)");
+    if (device.isNull()) {
         qCritical() << "No audio input device found.";
         return false;
     }
 
     // 检查设备是否支持此格式
-    if (!defaultDevice.isFormatSupported(format_)) {
+    if (!device.isFormatSupported(format_)) {
         qWarning() << "Requested audio format not supported by default device, trying nearest.";
-        format_ = defaultDevice.nearestFormat(format_);
+        format_ = device.nearestFormat(format_);
         // 如果最接近的格式仍然无效，则失败
         if (format_.sampleRate() == 0) { // 无效格式的采样率通常为0
             qCritical() << "No valid audio format found for the default device.";
@@ -39,11 +65,16 @@ bool CAudioCapturer::initialize(const QAudioFormat& format)
     }
 
     // 创建 QAudioInput 实例
-    audioInput_.reset(new QAudioInput(defaultDevice, format_, this));
+    audioInput_.reset(new QAudioInput(device, format_, this));
     if (!audioInput_) {
         qCritical() << "Failed to create QAudioInput.";
         return false;
     }
+
+    int bufferSize = (format_.sampleRate() * format_.channelCount() * (format_.sampleSize() / 8)) / 10; // 100ms
+    audioInput_->setBufferSize(bufferSize);
+    qInfo() << "Set audio input buffer size to:" << audioInput_->bufferSize(); // 打印实际设置的大小
+    // --- 结束 ---
 
     // 连接状态变化信号，用于调试
     connect(audioInput_.data(), &QAudioInput::stateChanged, this, &CAudioCapturer::slot_StateChanged);
@@ -52,6 +83,7 @@ bool CAudioCapturer::initialize(const QAudioFormat& format)
     qInfo() << "Audio capturer initialized successfully with format:\n"
 			<< "Sample Rate:" << format_.sampleRate() << "\n"
 			<< "Channels:" << format_.channelCount() << "\n"
+			<< "Sample Size:" << format_.sampleSize() << "\n"
 			<< "Sample Format:" << format_.sampleType(); // 使用 sampleFormatName() 获取名称
 
     return true;
@@ -96,8 +128,11 @@ void CAudioCapturer::slot_ReadPCM()
     QByteArray newData = audioDevice_->read(bytesAvailable);
     if (newData.isEmpty()) return;
 
-    QMutexLocker locker(&mtx_);
-    buffer_.append(newData);
+    {
+        QMutexLocker locker(&mtx_);
+        buffer_.append(newData);
+    }
+	qDebug() << "Read " << bytesAvailable << " bytes of PCM data, total buffer size now:" << buffer_.size();
 }
 
 void CAudioCapturer::stop()
@@ -135,6 +170,12 @@ void CAudioCapturer::slot_StateChanged(QAudio::State newState)
     if (newState == QAudio::StoppedState) {
         if (audioInput_->error() != QAudio::NoError) {
             qWarning() << "Audio input error occurred:" << audioInput_->error();
+        }
+    }
+    else if (newState == QAudio::IdleState) {
+        // 如果在启动后又回到了 IdleState，说明启动失败
+        if (audioInput_->error() != QAudio::NoError) {
+            qWarning() << "Audio input failed to start, error:" << audioInput_->error();
         }
     }
 }

@@ -21,7 +21,6 @@ void MainWidget::slot_RecordButtonClicked()
 {
 	static bool record = false;
 	record = !record;
-    qDebug() << "record:" << record;
     if (record) {
         ui->pushButton->setIcon(QIcon(":/images/Resource/images/RecordButton_Stop_bg.png"));
         ui->openGLWidget->startRecord();

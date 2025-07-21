@@ -338,6 +338,7 @@ void OpenGLWidget::startRecord()
 		AudioConfig{48000, 2, 128000}
 	};
 	Q_ASSERT(CAVRecorder::GetInstance()->initialize(config));
+	CAVRecorder::GetInstance()->startRecording();
 
 	isRecording_ = true;
 }
@@ -402,14 +403,15 @@ void OpenGLWidget::recordAV(GLubyte* ptr, int w, int h, int channel)
 	{
 		qDebug() << "can't record video!";
 	}
-	Q_ASSERT(CAVRecorder::GetInstance()->recording(ptr));
+	//assert(CAVRecorder::GetInstance()->recording(ptr));
+	CAVRecorder::GetInstance()->recording(ptr);
 }
 
 void OpenGLWidget::stopRecord()
 {
 	isRecording_ = false;
 
-	CAVRecorder::GetInstance()->startRecording();
+	CAVRecorder::GetInstance()->stopRecording();
 }
 
 void OpenGLWidget::keyPressEvent(QKeyEvent* event)

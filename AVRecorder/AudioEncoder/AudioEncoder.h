@@ -39,11 +39,10 @@ public:
     /**
      * @brief 编码一帧音频数据。
      * @param pcmData 指向原始 S16 (交错格式) PCM 数据的指针。
-     * @param dataSize 数据的大小（字节）。
      * @return 返回一个包含零个或多个编码好的 AVPacket 的列表。
      *         调用者在使用完 packet 后必须负责调用 av_packet_free() 来释放它们。
      */
-    QVector<AVPacket*> encode(const unsigned char* pcmData, int dataSize);
+    QVector<AVPacket*> encode(const unsigned char* pcmData);
 
     /**
      * @brief 清空编码器中所有缓存的帧。
