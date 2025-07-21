@@ -60,6 +60,9 @@ SOURCES += \
     ./OpenGLWidget/VideoCaptureThread/VideoCaptureThread.cpp \
     ./OpenGLWidget/VideoCaptureThread/YUVDraw/GLYuvDraw.cpp \
     ./AVRecorder/AVRecorder.cpp \
+    ./AVRecorder/Muxer/Muxer.cpp \
+    ./AVRecorder/AudioEncoder/AudioEncoder.cpp \
+    ./AVRecorder/VideoEncoder/VideoEncoder.cpp \
     ./AVRecorder/AudioCapturer/AudioCapturer.cpp \
     ./Common/Camera/GLCamera.cpp \
     ./Common/ShaderProgram/GLShaderProgram.cpp
@@ -78,6 +81,9 @@ INCLUDEPATH += ./OpenGLWidget/SceneManger/Object/Model/Mesh
 INCLUDEPATH += ./OpenGLWidget/SceneManger/Object/SkyBox
 INCLUDEPATH += ./OpenGLWidget/SceneManger/Object/Sun
 INCLUDEPATH += ./AVRecorder
+INCLUDEPATH += ./AVRecorder/Muxer
+INCLUDEPATH += ./AVRecorder/AudioEncoder
+INCLUDEPATH += ./AVRecorder/VideoEncoder
 INCLUDEPATH += ./AVRecorder/AudioCapturer
 
 HEADERS += \
@@ -92,6 +98,9 @@ HEADERS += \
     ./OpenGLWidget/VideoCaptureThread/VideoCaptureThread.h \
     ./OpenGLWidget/VideoCaptureThread/YUVDraw/GLYuvDraw.h \
     ./AVRecorder/AVRecorder.h \
+    ./AVRecorder/Muxer/Muxer.h \
+    ./AVRecorder/AudioEncoder/AudioEncoder.h \
+    ./AVRecorder/VideoEncoder/VideoEncoder.h \
     ./AVRecorder/AudioCapturer/AudioCapturer.h \
     ./Common/ShaderProgram/GLShaderProgram.h \
     ./Common/Camera/GLCamera.h \
