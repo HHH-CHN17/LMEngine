@@ -334,7 +334,7 @@ void OpenGLWidget::startRecord()
 
 	AVConfig config{
 		pathStr.toStdString(),
-		VideoConfig{recordW_, recordH_, 640, 480, 30, 2000000},
+		VideoConfig{recordW_, recordH_, 1920, 1080, 30, 2000000},
 		AudioConfig{48000, 2, 128000}
 	};
 	Q_ASSERT(CAVRecorder::GetInstance()->initialize(config));

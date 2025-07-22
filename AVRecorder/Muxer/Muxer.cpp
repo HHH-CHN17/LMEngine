@@ -5,6 +5,7 @@
 #include <libavutil/log.h>
 #include <stdarg.h> 
 
+#ifdef DEBUG
 static void ffmpeg_log_callback(void* ptr, int level, const char* fmt, va_list vargs)
 {
     // 检查日志级别，我们可以忽略一些过于详细的信息
@@ -47,6 +48,7 @@ static void ffmpeg_log_callback(void* ptr, int level, const char* fmt, va_list v
         break;
     }
 }
+#endif // DEBUG
 
 static void avCheckRet(const char* operate, int ret)
 {

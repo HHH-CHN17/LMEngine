@@ -10,6 +10,23 @@ CONFIG += c++17
 
 CONFIG += resources_big
 
+CONFIG(release_with_debug, release|debug) {
+    # 继承 release 配置
+    CONFIG += release
+
+    # 移除 Qt 对 DEBUG 宏的定义，使其行为更像一个真正的 release 版本
+    DEFINES -= QT_DEBUG
+
+    # 添加调试符号
+    QMAKE_CXXFLAGS += -g
+    QMAKE_CFLAGS += -g
+    QMAKE_LFLAGS += -g
+
+    # (可选) 调整优化级别
+    # QMAKE_CXXFLAGS -= -O2
+    # QMAKE_CXXFLAGS += -Og
+}
+
 LIBS += -lOpenGL32 -lglu32
 
 INCLUDEPATH += $$PWD/lib/win32/libglew/include
