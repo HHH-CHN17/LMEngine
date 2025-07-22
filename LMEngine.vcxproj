@@ -205,6 +205,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AVRecorder\AudioCapturer\AudioCapturer.cpp" />
+    <ClCompile Include="AVRecorder\AudioCapturer\IOBuffer\IOBuffer.cpp" />
     <ClCompile Include="AVRecorder\AudioEncoder\AudioEncoder.cpp" />
     <ClCompile Include="AVRecorder\AVRecorder.cpp" />
     <ClCompile Include="AVRecorder\Muxer\Muxer.cpp" />
@@ -255,6 +256,7 @@
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="AVRecorder\AudioCapturer\AudioCapturer.h" />
+    <QtMoc Include="AVRecorder\AudioCapturer\IOBuffer\IOBuffer.h" />
     <ClInclude Include="AVRecorder\AudioEncoder\AudioEncoder.h" />
     <QtMoc Include="AVRecorder\AVRecorder.h" />
     <ClInclude Include="AVRecorder\Muxer\Muxer.h" />

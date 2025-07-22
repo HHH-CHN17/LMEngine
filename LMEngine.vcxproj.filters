@@ -92,6 +92,9 @@
     <Filter Include="Source\Widget\AVRecorder\Muxer">
       <UniqueIdentifier>{b19ebeea-7561-48b3-bcd8-87dc0c076e1c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Widget\AVRecorder\AudioCapturer\IOBuffer">
+      <UniqueIdentifier>{3723f2eb-cc08-428c-9151-27eb8999a3d1}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -148,6 +151,9 @@
     <ClCompile Include="AVRecorder\Muxer\Muxer.cpp">
       <Filter>Source\Widget\AVRecorder\Muxer</Filter>
     </ClCompile>
+    <ClCompile Include="AVRecorder\AudioCapturer\IOBuffer\IOBuffer.cpp">
+      <Filter>Source\Widget\AVRecorder\AudioCapturer\IOBuffer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="MainWidget.h">
@@ -176,6 +182,9 @@
     </QtMoc>
     <QtMoc Include="AVRecorder\AVRecorder.h">
       <Filter>Source\Widget\AVRecorder</Filter>
+    </QtMoc>
+    <QtMoc Include="AVRecorder\AudioCapturer\IOBuffer\IOBuffer.h">
+      <Filter>Source\Widget\AVRecorder\AudioCapturer\IOBuffer</Filter>
     </QtMoc>
   </ItemGroup>
   <ItemGroup>

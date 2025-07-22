@@ -225,30 +225,28 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
     // ------------------------- 音频编码 -------------------------
     // 计算编码一帧音频需要多少字节
     const int audioBytesPerFrame = audioEncoder_->getBytesPerFrame();
-
+    //qDebug() << "audioBytesPerFrame: " << audioBytesPerFrame;
     // 循环处理所有在缓冲区中积累的完整音频帧
     while (true) 
     {
         QByteArray pcmChunk;
         {
-            // 仍然需要锁来保护对 CAudioCapturer 缓冲区的访问，因为它是由另一个线程（Qt内部）填充的
-            QMutexLocker locker{ &audioCapturer_->getMutex() };
-            if (audioCapturer_->getBuffer().size() < audioBytesPerFrame) 
+            pcmChunk = audioCapturer_->readChunk(audioBytesPerFrame);
+            if (pcmChunk.isEmpty())
             {
+                qDebug() << "need more pcm data to encode";
                 break; // 音频数据不够一帧
             }
-            pcmChunk = audioCapturer_->getBuffer().left(audioBytesPerFrame);
-            audioCapturer_->getBuffer().remove(0, audioBytesPerFrame);
         }
 
         // 2. 音频需要先获取PCM，再编码
         QVector<AVPacket*> audioPackets = audioEncoder_->encode(reinterpret_cast<const uint8_t*>(pcmChunk.constData()));
         for (AVPacket* pkt : audioPackets) 
         {
-            qDebug() << "Muxer: Writing packet for stream index" << pkt->stream_index
+            /*qDebug() << "Muxer: Writing packet for stream index" << pkt->stream_index
                 << "size:" << pkt->size
                 << "pts:" << pkt->pts
-                << "dts:" << pkt->dts;
+                << "dts:" << pkt->dts;*/
             muxer_->writePacket(pkt);
             av_packet_unref(pkt);
             av_packet_free(&pkt);

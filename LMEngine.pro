@@ -64,6 +64,7 @@ SOURCES += \
     ./AVRecorder/AudioEncoder/AudioEncoder.cpp \
     ./AVRecorder/VideoEncoder/VideoEncoder.cpp \
     ./AVRecorder/AudioCapturer/AudioCapturer.cpp \
+    ./AVRecorder/AudioCapturer/IOBuffer/IOBuffer.cpp \
     ./Common/Camera/GLCamera.cpp \
     ./Common/ShaderProgram/GLShaderProgram.cpp
 
@@ -85,6 +86,7 @@ INCLUDEPATH += ./AVRecorder/Muxer
 INCLUDEPATH += ./AVRecorder/AudioEncoder
 INCLUDEPATH += ./AVRecorder/VideoEncoder
 INCLUDEPATH += ./AVRecorder/AudioCapturer
+INCLUDEPATH += ./AVRecorder/AudioCapturer/IOBuffer
 
 HEADERS += \
     ./MainWidget.h \
@@ -102,6 +104,7 @@ HEADERS += \
     ./AVRecorder/AudioEncoder/AudioEncoder.h \
     ./AVRecorder/VideoEncoder/VideoEncoder.h \
     ./AVRecorder/AudioCapturer/AudioCapturer.h \
+    ./AVRecorder/AudioCapturer/IOBuffer/IOBuffer.h \
     ./Common/ShaderProgram/GLShaderProgram.h \
     ./Common/Camera/GLCamera.h \
     ./Common/DataDefine.h \

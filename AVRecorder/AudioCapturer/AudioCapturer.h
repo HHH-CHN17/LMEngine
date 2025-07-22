@@ -6,8 +6,9 @@
 #include <QAudioFormat>
 #include <QByteArray>
 #include <QMutex>
-#include <QIODevice>
+#include <QBuffer>
 #include <QScopedPointer>
+#include "AVRecorder/AudioCapturer/IOBuffer/IOBuffer.h"
 
 class CAudioCapturer : public QObject
 {
@@ -26,30 +27,27 @@ public:
     // 停止捕获
     void stop();
 
-    // 获取音频缓冲区的引用，以便消费者可以访问
-    QByteArray& getBuffer();
-    QMutex& getMutex();
+    // 读取chunksize个音频数据，线程安全
+    QByteArray readChunk(qint64 chunkSize);
 
     // 获取最终确定的音频格式
     QAudioFormat getAudioFormat() const;
 
 private:
-    QAudioDeviceInfo getDevice(const char* deviceName);
+    QAudioDeviceInfo getDeviceInfo(const char* deviceName);
 
 private slots:
     // QAudioInput 的状态变化时调用
     void slot_StateChanged(QAudio::State newState);
 
-    void slot_ReadPCM();
-
 private:
     QAudioFormat format_;
     QScopedPointer<QAudioInput> audioInput_;
-    QIODevice* audioDevice_ = nullptr;       // 这个将是 QAudioInput::start() 返回的设备
+    CIOBuffer* audioIOBuffer_ = nullptr;       // 这个将是 QAudioInput::start() 返回的设备
 
     // 线程安全的音频数据缓冲区
-    mutable QMutex mtx_;
-    QByteArray buffer_;
+    //mutable QMutex mtx_;
+    //QByteArray buffer_;
 
     bool isInitialized_ = false;
 };

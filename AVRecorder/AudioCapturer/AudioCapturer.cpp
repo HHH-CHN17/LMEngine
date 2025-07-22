@@ -12,7 +12,7 @@ CAudioCapturer::~CAudioCapturer()
     stop();
 }
 
-QAudioDeviceInfo CAudioCapturer::getDevice(const char* deviceName)
+QAudioDeviceInfo CAudioCapturer::getDeviceInfo(const char* deviceName)
 {
     QString expect = QString::fromUtf8(deviceName);
     QAudioDeviceInfo targetDevice{};
@@ -34,6 +34,21 @@ QAudioDeviceInfo CAudioCapturer::getDevice(const char* deviceName)
         targetDevice = QAudioDeviceInfo::defaultInputDevice();
     }
 
+    if (targetDevice.isNull()) {
+        qCritical() << "No audio input device found.";
+        return QAudioDeviceInfo{};
+    }
+
+    // 检查设备是否支持此格式
+    if (!targetDevice.isFormatSupported(format_)) {
+        qWarning() << "Requested audio format not supported by default device, trying nearest.";
+        format_ = targetDevice.nearestFormat(format_);
+        // 如果最接近的格式仍然无效，则失败
+        if (format_.sampleRate() == 0) { // 无效格式的采样率通常为0
+            qCritical() << "No valid audio format found for the default device.";
+            return QAudioDeviceInfo{};
+        }
+    }
     return targetDevice;
 }
 
@@ -46,39 +61,23 @@ bool CAudioCapturer::initialize(const QAudioFormat& format)
     
 
     format_ = format;
-    // 获取默认输入设备信息
-    const QAudioDeviceInfo device = getDevice("Main Mic (Razer Seiren Mini)");
-    if (device.isNull()) {
-        qCritical() << "No audio input device found.";
-        return false;
-    }
 
-    // 检查设备是否支持此格式
-    if (!device.isFormatSupported(format_)) {
-        qWarning() << "Requested audio format not supported by default device, trying nearest.";
-        format_ = device.nearestFormat(format_);
-        // 如果最接近的格式仍然无效，则失败
-        if (format_.sampleRate() == 0) { // 无效格式的采样率通常为0
-            qCritical() << "No valid audio format found for the default device.";
-            return false;
-        }
-    }
-
-    // 创建 QAudioInput 实例
-    audioInput_.reset(new QAudioInput(device, format_, this));
+    // ------------------------- QAudioInput初始化 -------------------------
+    audioInput_.reset(new QAudioInput(getDeviceInfo("Main Mic (Razer Seiren Mini)"), format_, this));
     if (!audioInput_) {
         qCritical() << "Failed to create QAudioInput.";
         return false;
     }
 
-    int bufferSize = (format_.sampleRate() * format_.channelCount() * (format_.sampleSize() / 8)) / 10; // 100ms
-    audioInput_->setBufferSize(bufferSize);
-    qInfo() << "Set audio input buffer size to:" << audioInput_->bufferSize(); // 打印实际设置的大小
-    // --- 结束 ---
+    audioInput_->setNotifyInterval(100);
 
-    // 连接状态变化信号，用于调试
     connect(audioInput_.data(), &QAudioInput::stateChanged, this, &CAudioCapturer::slot_StateChanged);
 
+    // ------------------------- QBuffer初始化 -------------------------
+    audioIOBuffer_ = new CIOBuffer{ this };
+    audioIOBuffer_->open(QIODevice::ReadWrite | QIODevice::Append);
+
+    // ------------------------- 其他 -------------------------
     isInitialized_ = true;
     qInfo() << "Audio capturer initialized successfully with format:\n"
 			<< "Sample Rate:" << format_.sampleRate() << "\n"
@@ -96,43 +95,23 @@ void CAudioCapturer::start()
         return;
     }
 
-    // QAudioInput::start() 返回一个 QIODevice，所有捕获的数据都会被写入这个设备
-    // 我们需要从这个设备中读取数据
     if (audioInput_ && audioInput_->state() != QAudio::ActiveState) {
-        // 清空旧的缓冲区数据
-        {
-            QMutexLocker locker(&mtx_);
-            buffer_.clear();
-        }
 
-        audioDevice_ = audioInput_->start(); //  开始接受PCM数据！
-        if (audioDevice_) {
-            // 连接这个 IO 设备的 readyRead 信号
-            // 这个槽函数负责从 audioDevice_ 读取数据并放入 buffer_
-            connect(audioDevice_, &QIODevice::readyRead, this, CAudioCapturer::slot_ReadPCM);
+        audioInput_->start(audioIOBuffer_); //  开始接受PCM数据！
+        // 该方法已被抛弃，他妈的!
+        /*if (audioIOBuffer_) {
+            
+            connect(audioIOBuffer_, &QIODevice::readyRead, this, &CAudioCapturer::slot_ReadPCM);
             qInfo() << "Audio capture started.";
         }
         else {
             qCritical() << "Failed to start audio capture, QAudioInput::start() returned nullptr.";
-        }
+        }*/
     }
-}
-
-void CAudioCapturer::slot_ReadPCM()
-{
-    if (!audioDevice_) return;
-
-    const qint64 bytesAvailable = audioDevice_->bytesAvailable();
-    if (bytesAvailable <= 0) return;
-
-    QByteArray newData = audioDevice_->read(bytesAvailable);
-    if (newData.isEmpty()) return;
-
+    else
     {
-        QMutexLocker locker(&mtx_);
-        buffer_.append(newData);
+        qDebug() << "audioInput_ has started";
     }
-	qDebug() << "Read " << bytesAvailable << " bytes of PCM data, total buffer size now:" << buffer_.size();
 }
 
 void CAudioCapturer::stop()
@@ -141,21 +120,17 @@ void CAudioCapturer::stop()
     {
         audioInput_->stop();
         disconnect(audioInput_.data(), &QAudioInput::stateChanged, this, &CAudioCapturer::slot_StateChanged);
-        disconnect(audioDevice_, &QIODevice::readyRead, this, CAudioCapturer::slot_ReadPCM);
-        // audioDevice_ 会在 QAudioInput 停止时自动变为无效，不需要手动断开连接或删除
-        audioDevice_ = nullptr;
+        if (audioIOBuffer_ && audioIOBuffer_->isOpen()) {
+            audioIOBuffer_->close();
+        }
+        delete audioIOBuffer_;
         qInfo() << "Audio capture stopped.";
     }
 }
 
-QByteArray& CAudioCapturer::getBuffer()
+QByteArray CAudioCapturer::readChunk(qint64 chunkSize)
 {
-    return buffer_;
-}
-
-QMutex& CAudioCapturer::getMutex()
-{
-    return mtx_;
+	return audioIOBuffer_->readChunk(chunkSize);
 }
 
 QAudioFormat CAudioCapturer::getAudioFormat() const
