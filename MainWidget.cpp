@@ -1,5 +1,6 @@
 #include "MainWidget.h"
 #include "ui_MainWidget.h"
+#include "Common/DataDefine.h"
 #include <QDebug>
 #include <QIcon>
 
@@ -23,10 +24,10 @@ void MainWidget::slot_RecordButtonClicked()
 	record = !record;
     if (record) {
         ui->pushButton->setIcon(QIcon(":/images/Resource/images/RecordButton_Stop_bg.png"));
-        ui->openGLWidget->startRecord();
+        ui->openGLWidget->startRecord(avACT::RECORD);
     }
     else {
         ui->pushButton->setIcon(QIcon(":/images/Resource/images/RecordButton_Start_bg.png"));
-        ui->openGLWidget->stopRecord();
+        ui->openGLWidget->stopRecord(avACT::RECORD);
     }
 }

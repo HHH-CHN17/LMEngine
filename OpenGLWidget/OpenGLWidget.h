@@ -20,6 +20,7 @@
 #include "OpenGLWidget/VideoCaptureThread/VideoCaptureThread.h"
 #include "AVRecorder/AVRecorder.h"
 #include "SceneManger/GLSceneManager.h"
+#include "RtmpPublisher/RtmpPublisher.h"
 
 class OpenGLWidget: public QOpenGLWidget, public QOpenGLExtraFunctions
 {
@@ -30,9 +31,9 @@ public:
 
 public:
     // 仅初始化MP4文件，写入MP4头，真正开启视频录制在渲染循环的recordAV()中
-    void startRecord();
+    void startRecord(avACT action);
     // 写入MP4尾，
-    void stopRecord();
+    void stopRecord(avACT action);
 
 protected:
     void initializeGL() override;
@@ -60,15 +61,21 @@ private:
     // resizeGL(int w, int h)中使用
     void reallocSceneFrameBuffer(const int& w, const int& h);
     void adjustViewPort(const int& w, const int& h);
-    // 使用双PBO记录视频
+    // 使用双PBO记录视频/推流
     void useRecordPBOs();
-    void recordAV(GLubyte* ptr, int w, int h, int channel);
+    void recordAV(GLubyte* ptr);
+    void rtmpPush(GLubyte* ptr);
+    void rtspPush(GLubyte* ptr);
     void saveImage(GLubyte* ptr);
 
 private:
     QOpenGLContext* mainCtx_ = nullptr;
 
+    // 用于判断需要推流还是录制视频
+    bool needPBO = false;
     bool isRecording_ = false;
+    bool isRtmpPush_ = false;
+    bool isRtspPush_ = false;
 
     // ------------------------- 摄像机 -------------------------
     QDateTime lastTime_;

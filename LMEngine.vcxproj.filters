@@ -95,6 +95,12 @@
     <Filter Include="Source\Widget\AVRecorder\AudioCapturer\IOBuffer">
       <UniqueIdentifier>{3723f2eb-cc08-428c-9151-27eb8999a3d1}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\RtmpPublisher">
+      <UniqueIdentifier>{23e55f6c-fe58-472c-a33a-6952619780f7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\RtmpPublisher\RtmpPush">
+      <UniqueIdentifier>{05c260db-b91d-4d2d-811c-925a0f1c439d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -154,6 +160,12 @@
     <ClCompile Include="AVRecorder\AudioCapturer\IOBuffer\IOBuffer.cpp">
       <Filter>Source\Widget\AVRecorder\AudioCapturer\IOBuffer</Filter>
     </ClCompile>
+    <ClCompile Include="RtmpPublisher\RtmpPublisher.cpp">
+      <Filter>Source\RtmpPublisher</Filter>
+    </ClCompile>
+    <ClCompile Include="RtmpPublisher\RtmpPush\RtmpPush.cpp">
+      <Filter>Source\RtmpPublisher\RtmpPush</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="MainWidget.h">
@@ -185,6 +197,9 @@
     </QtMoc>
     <QtMoc Include="AVRecorder\AudioCapturer\IOBuffer\IOBuffer.h">
       <Filter>Source\Widget\AVRecorder\AudioCapturer\IOBuffer</Filter>
+    </QtMoc>
+    <QtMoc Include="RtmpPublisher\RtmpPublisher.h">
+      <Filter>Source\RtmpPublisher</Filter>
     </QtMoc>
   </ItemGroup>
   <ItemGroup>
@@ -235,6 +250,9 @@
     </ClInclude>
     <ClInclude Include="AVRecorder\Muxer\Muxer.h">
       <Filter>Source\Widget\AVRecorder\Muxer</Filter>
+    </ClInclude>
+    <ClInclude Include="RtmpPublisher\RtmpPush\RtmpPush.h">
+      <Filter>Source\RtmpPublisher\RtmpPush</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

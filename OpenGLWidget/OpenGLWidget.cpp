@@ -235,7 +235,8 @@ void OpenGLWidget::paintGL()
 	lightPos = glm::vec3(2.0f * cos(degree), 1.0f, 2.0f * sin(degree));
 	pGLSceneManager_->draw(view, projection, FrameTexID_, lightPos, pCamera_->position_);
 
-	if (isRecording_) {
+	needPBO = isRecording_ | isRtmpPush_ | isRtspPush_;
+	if (needPBO) {
 		// YUV420P要求分辨率必须为偶数！！！否则avcodec_open2打开h.264编码器失败
 		// 所以这里需要对视频帧做转换
 
@@ -325,22 +326,46 @@ void OpenGLWidget::resizeGL(int w, int h)
 	org_wh = w * h;
 }
 
-void OpenGLWidget::startRecord()
+void OpenGLWidget::startRecord(avACT action)
 {
-	// initialize，随后在paintGL中记录
-	QDateTime dateTime = QDateTime::currentDateTime();
-	QString pathStr = qApp->applicationDirPath() + "/" + dateTime.toString("yyyyMMddhhmmss") + ".mp4";
-	qDebug() << "start record video to: " << pathStr;
-
 	AVConfig config{
-		pathStr.toStdString(),
+		std::string{},
 		VideoConfig{recordW_, recordH_, 1920, 1080, 30, 2000000},
 		AudioConfig{48000, 2, 128000}
 	};
-	Q_ASSERT(CAVRecorder::GetInstance()->initialize(config));
-	CAVRecorder::GetInstance()->startRecording();
 
-	isRecording_ = true;
+	if (action == avACT::RECORD)
+	{
+		// initialize，随后在paintGL中记录
+		QDateTime dateTime = QDateTime::currentDateTime();
+		config.path = (qApp->applicationDirPath() + "/" + dateTime.toString("yyyyMMddhhmmss") + ".mp4").toStdString();
+		qDebug() << "start record video to: " << config.path.c_str();
+
+
+		Q_ASSERT(CAVRecorder::GetInstance()->initialize(config));
+		CAVRecorder::GetInstance()->startRecording();
+
+		isRecording_ = true;
+	}
+	else if (action == avACT::RTMPPUSH)
+	{
+		// 注意：rtmp推流时，为了保证视频数据的及时性，需要考虑降低帧率，缩短IDR帧间隔，这些参数需要修改AVCodecContext的参数
+		config.path = "";
+		qDebug() << "connect RTMP server to: " << config.path.c_str();
+
+		CRtmpPublisher::GetInstance()->initialize(config);
+		isRtmpPush_ = true;
+	}
+	else if (action == avACT::RTSPPUSH)
+	{
+
+		isRtspPush_ = true;
+	}
+	else
+	{
+		qDebug() << "undefined action";
+	}
+	
 }
 
 void OpenGLWidget::useRecordPBOs()
@@ -367,7 +392,13 @@ void OpenGLWidget::useRecordPBOs()
 	GLubyte* ptr = static_cast<GLubyte*>(glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, recordW_ * recordH_ * 4, GL_MAP_READ_BIT));
 	if (ptr)
 	{
-		recordAV(ptr, recordW_, recordH_, 4);
+		if (isRecording_)
+			recordAV(ptr);
+		else if (isRtmpPush_)
+			rtmpPush(ptr);
+		else if (isRtspPush_)
+			rtspPush(ptr);
+		
 		//saveImage(ptr);
 		glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 	}
@@ -397,7 +428,7 @@ void OpenGLWidget::saveImage(GLubyte* ptr)
 		qDebug() << "save image error";
 }
 
-void OpenGLWidget::recordAV(GLubyte* ptr, int w, int h, int channel)
+void OpenGLWidget::recordAV(GLubyte* ptr)
 {
 	if (!isRecording_)
 	{
@@ -407,11 +438,36 @@ void OpenGLWidget::recordAV(GLubyte* ptr, int w, int h, int channel)
 	CAVRecorder::GetInstance()->recording(ptr);
 }
 
-void OpenGLWidget::stopRecord()
+void OpenGLWidget::rtmpPush(GLubyte* ptr)
 {
-	isRecording_ = false;
+	
+}
 
-	CAVRecorder::GetInstance()->stopRecording();
+void OpenGLWidget::rtspPush(GLubyte* ptr)
+{
+	
+}
+
+void OpenGLWidget::stopRecord(avACT action)
+{
+	if (action == avACT::RECORD)
+	{
+		isRecording_ = false;
+		CAVRecorder::GetInstance()->stopRecording();
+	}
+	else if (action == avACT::RTMPPUSH)
+	{
+		isRtmpPush_ = false;
+	}
+	else if (action == avACT::RTSPPUSH)
+	{
+		isRtspPush_ = false;
+	}
+	else
+	{
+		qDebug() << "undefined action";
+	}
+	
 }
 
 void OpenGLWidget::keyPressEvent(QKeyEvent* event)

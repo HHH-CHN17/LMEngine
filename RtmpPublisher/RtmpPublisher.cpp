@@ -1,4 +1,4 @@
-#include "AVRecorder.h"
+#include "RtmpPublisher.h"
 #include <QDebug>
 #include <qguiapplication.h>
 
@@ -55,29 +55,29 @@ static void avCheckRet(const char* operate, int ret)
 }
 
 
-CAVRecorder::CAVRecorder(QObject* parent)
+CRtmpPublisher::CRtmpPublisher(QObject* parent)
     : QObject(parent)
 {
     av_register_all();
     avcodec_register_all();
 }
 
-CAVRecorder::~CAVRecorder()
+CRtmpPublisher::~CRtmpPublisher()
 {
-    if (isRecording_) 
+    if (isRecording_)
     {
-        stopRecording();
+        stopPush();
     }
 }
 
-CAVRecorder* CAVRecorder::GetInstance()
+CRtmpPublisher* CRtmpPublisher::GetInstance()
 {
-    static CAVRecorder objAVRecorder{};
+    static CRtmpPublisher objAVRecorder{};
 
     return &objAVRecorder;
 }
 
-QAudioFormat CAVRecorder::initAudioFormat(const AVConfig& config)
+QAudioFormat CRtmpPublisher::initAudioFormat(const AVConfig& config)
 {
     QAudioFormat audioFormat;
     audioFormat.setSampleRate(config.audioCfg.audio_sample_rate);
@@ -90,46 +90,39 @@ QAudioFormat CAVRecorder::initAudioFormat(const AVConfig& config)
     return audioFormat;
 }
 
-bool CAVRecorder::initialize(const AVConfig& config)
+bool CRtmpPublisher::initialize(const AVConfig& config)
 {
-    if (isRecording_) 
+    if (isRecording_)
     {
-        qWarning() << "Controller is busy. Please stop recording first.";
+        qWarning() << "Controller is busy. Please stop pushing first.";
         return false;
     }
 
     cleanup();
     config_ = config;
 
-    // ------------------------- muxer初始化 -------------------------
-    muxer_.reset(new CMuxer{});
-    if (!muxer_->initialize(config_.path.c_str())) 
+    // ------------------------- rtmpPush初始化 -------------------------
+    rtmpPush_.reset(new CRtmpPush{});
+    if (!rtmpPush_->connect(config_.path.c_str()))
     {
-        qCritical() << "Failed to initialize Muxer.";
+        qCritical() << "Failed to initialize rtmpPush.";
         cleanup();
         return false;
     }
 
     // ------------------------- 视频编码器初始化 -------------------------
     videoEncoder_.reset(new CVideoEncoder{});
-    if (!videoEncoder_->initialize(config_.videoCfg)) 
+    if (!videoEncoder_->initialize(config_.videoCfg))
     {
         qCritical() << "Failed to initialize Video Encoder.";
         cleanup();
         return false;
     }
-    AVStream* videoStream = muxer_->addStream(videoEncoder_->getCodecContext());
-    if (!videoStream)
-    {
-        qCritical() << "Failed to Add Video Stream.";
-        return false;
-    }
-    videoEncoder_->setStream(videoStream);
 
     // ------------------------- 录音设备初始化 -------------------------
     audioCapturer_.reset(new CAudioCapturer{});
     QAudioFormat audioFormat = initAudioFormat(config);
-    if (!audioCapturer_->initialize(audioFormat)) 
+    if (!audioCapturer_->initialize(audioFormat))
     {
         qCritical() << "Failed to initialize Audio Capturer.";
         cleanup();
@@ -140,25 +133,18 @@ bool CAVRecorder::initialize(const AVConfig& config)
     audioEncoder_.reset(new CAudioEncoder{});
     const QAudioFormat& finalAudioFormat = audioCapturer_->getAudioFormat();
     if (!audioEncoder_->initialize(
-			finalAudioFormat.sampleRate(),
-			finalAudioFormat.channelCount(),
-			config_.audioCfg.audio_bitrate)
+        finalAudioFormat.sampleRate(),
+        finalAudioFormat.channelCount(),
+        config_.audioCfg.audio_bitrate)
         )
     {
         qCritical() << "Failed to initialize Audio Encoder.";
         cleanup();
         return false;
     }
-    AVStream* audioStream = muxer_->addStream(audioEncoder_->getCodecContext());
-    if (!audioStream)
-    {
-        qCritical() << "Failed to Add Audio Stream.";
-        return false;
-    }
-    audioEncoder_->setStream(audioStream);
 
-    // ------------------------- 写入文件头 -------------------------
-    if (!muxer_->writeHeader()) 
+    // ------------------------- 检查是否已连接 -------------------------
+    if (!rtmpPush_->isConnected())
     {
         qCritical() << "Failed to write muxer header.";
         cleanup();
@@ -169,7 +155,7 @@ bool CAVRecorder::initialize(const AVConfig& config)
     return true;
 }
 
-void CAVRecorder::startRecording()
+void CRtmpPublisher::startPush()
 {
     if (isRecording_) return;
 
@@ -178,12 +164,12 @@ void CAVRecorder::startRecording()
     qInfo() << "Recording started.";
 }
 
-void CAVRecorder::stopRecording()
+void CRtmpPublisher::stopPush()
 {
     if (!isRecording_) return;
 
     isRecording_ = false;
-    qInfo() << "Stopping recording...";
+    qInfo() << "Stopping pushing...";
 
     audioCapturer_->stop(); // 停止录音
 
@@ -192,24 +178,24 @@ void CAVRecorder::stopRecording()
     // ------------------------- 清空视频编码器缓存 -------------------------
     QVector<AVPacket*> videoPackets = videoEncoder_->flush();
     for (AVPacket* pkt : videoPackets) {
-        muxer_->writePacket(pkt);
+        rtmpPush_->writePacket(pkt);
         av_packet_free(&pkt);
     }
 
     // ------------------------- 清空音频编码器中缓存 -------------------------
     QVector<AVPacket*> audioPackets = audioEncoder_->flush();
     for (AVPacket* pkt : audioPackets) {
-        muxer_->writePacket(pkt);
+        rtmpPush_->writePacket(pkt);
         av_packet_free(&pkt);
     }
 
-    // ------------------------- 关闭muxer -------------------------
-    muxer_->close();
+    // ------------------------- 关闭rtmpPush -------------------------
+    rtmpPush_->disconnect();
     cleanup(); // 清理所有资源
     qInfo() << "Recording stopped.";
 }
 
-bool CAVRecorder::recording(const unsigned char* rgbData)
+bool CRtmpPublisher::pushing(const unsigned char* rgbData)
 {
     if (!isRecording_) return false;
     if (!rgbData) return false;
@@ -217,9 +203,9 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
     // ------------------------- 视频编码 -------------------------
     // 1. 视频可以直接编码
     QVector<AVPacket*> videoPackets = videoEncoder_->encode(rgbData);
-    for (AVPacket* pkt : videoPackets) 
+    for (AVPacket* pkt : videoPackets)
     {
-        muxer_->writePacket(pkt);
+        rtmpPush_->writePacket(pkt);
         //av_packet_unref(pkt);
         av_packet_free(&pkt);
     }
@@ -229,7 +215,7 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
     const int audioBytesPerFrame = audioEncoder_->getBytesPerFrame();
     //qDebug() << "audioBytesPerFrame: " << audioBytesPerFrame;
     // 循环处理所有在缓冲区中积累的完整音频帧
-    while (true) 
+    while (true)
     {
         QByteArray pcmChunk;
         {
@@ -243,13 +229,13 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
 
         // 2. 音频需要先获取PCM，再编码
         QVector<AVPacket*> audioPackets = audioEncoder_->encode(reinterpret_cast<const uint8_t*>(pcmChunk.constData()));
-        for (AVPacket* pkt : audioPackets) 
+        for (AVPacket* pkt : audioPackets)
         {
             /*qDebug() << "Muxer: Writing packet for stream index" << pkt->stream_index
                 << "size:" << pkt->size
                 << "pts:" << pkt->pts
                 << "dts:" << pkt->dts;*/
-            muxer_->writePacket(pkt);
+            rtmpPush_->writePacket(pkt);
             av_packet_unref(pkt);
             av_packet_free(&pkt);
         }
@@ -258,14 +244,14 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
     return true;
 }
 
-bool CAVRecorder::isRecording() const
+bool CRtmpPublisher::isRecording() const
 {
     return isRecording_;
 }
 
-void CAVRecorder::cleanup()
+void CRtmpPublisher::cleanup()
 {
-    muxer_.reset();
+    rtmpPush_.reset();
     videoEncoder_.reset();
     audioEncoder_.reset();
     audioCapturer_.reset();

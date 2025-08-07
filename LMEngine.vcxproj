@@ -223,6 +223,8 @@
     <ClCompile Include="OpenGLWidget\SceneManger\Object\Sun\GLSun.cpp" />
     <ClCompile Include="OpenGLWidget\VideoCaptureThread\VideoCaptureThread.cpp" />
     <ClCompile Include="OpenGLWidget\VideoCaptureThread\YUVDraw\GLYuvDraw.cpp" />
+    <ClCompile Include="RtmpPublisher\RtmpPublisher.cpp" />
+    <ClCompile Include="RtmpPublisher\RtmpPush\RtmpPush.cpp" />
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="MainWidget.h">
@@ -255,6 +257,8 @@
     </QtRcc>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="RtmpPublisher\RtmpPush\RtmpPush.h" />
+    <QtMoc Include="RtmpPublisher\RtmpPublisher.h" />
     <QtMoc Include="AVRecorder\AudioCapturer\AudioCapturer.h" />
     <QtMoc Include="AVRecorder\AudioCapturer\IOBuffer\IOBuffer.h" />
     <ClInclude Include="AVRecorder\AudioEncoder\AudioEncoder.h" />

@@ -67,6 +67,14 @@ static_assert(std::is_pod_v<VertexAttr>, "VertexAttr is not POD!!");
 #pragma pack(pop)
 
 // ------------------------- 视频录制所需数据 -------------------------
+
+enum class avACT : uint8_t
+{
+    RECORD,
+    RTMPPUSH,
+    RTSPPUSH
+};
+
 typedef struct VideoConfig {
     int inWidth;
     int inHeight;
@@ -83,8 +91,8 @@ typedef struct AudioConfig {
 }AudioConfig;
 
 typedef struct AVConfig {
-    // 通用设置
-    std::string filePath;
+    // 通用设置（录制时为文件路径，推流时为RTMP/RTSP路径）
+    std::string path;
 
     // 视频参数
     VideoConfig videoCfg;
