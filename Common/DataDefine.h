@@ -5,8 +5,13 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <libavutil/log.h>
 #include <QDebug>
+
+extern "C" {
+#include <libavutil/rational.h>
+#include <libavutil/pixfmt.h>
+#include <libavutil/samplefmt.h>
+}
 
 // ------------------------- YUV渲染所需数据 -------------------------
 #pragma pack(push, 1)
@@ -66,7 +71,7 @@ typedef struct VertexAttr
 static_assert(std::is_pod_v<VertexAttr>, "VertexAttr is not POD!!");
 #pragma pack(pop)
 
-// ------------------------- 视频录制所需数据 -------------------------
+// ------------------------- 音视频录制所需数据 -------------------------
 
 enum class avACT : uint8_t
 {
@@ -75,28 +80,50 @@ enum class avACT : uint8_t
     RTSPPUSH
 };
 
-typedef struct VideoConfig {
-    int inWidth;
-    int inHeight;
-    int outWidth;
-    int outHeight;
-    int framerate;
-    int bitrate = 2000000; // 默认 2 Mbps
-}VideoConfig;
+typedef struct VideoCodecCfg {
+    int     in_width_;
+    int     in_height_;
+    int     out_width_;
+    int     out_height_;
+    AVRational      framerate_;
+    AVRational      time_base_;
+    int     gop_size_;
+    int     max_b_frames_;
+    AVPixelFormat   pix_fmt_;
+    int     flags_;
+    AVCodecID       codec_id_;
+    int     bit_rate = 2000000; // 默认 2 Mbps
+}VideoCodecCfg;
 
-typedef struct AudioConfig {
-    int audio_sample_rate = 48000;  // 默认 48 kHz
-    int audio_channel_count = 2;    // 默认立体声
-    int audio_bitrate = 128000; // 默认 128 kbps
-}AudioConfig;
+typedef struct AudioCodecCfg {
+    int64_t bit_rate_ = 128000; // 默认 128 kbps
+    int     sample_rate_ = 48000;  // 默认 48 kHz
+    int     channels_ = 2;    // 默认立体声
+    int64_t         channel_layout_;
+    AVSampleFormat  sample_fmt_;
+    AVRational      time_base_;
+    int     flags_;
+}AudioCodecCfg;
+
+typedef struct AudioFormat {
+    int     sample_rate_;
+    int     channels_ = 2;
+    int     sample_size_;
+    QAudioFormat::SampleType    sample_fmt_;
+    QAudioFormat::Endian        byte_order_;
+    QString codec_;
+}AudioFormat;
 
 typedef struct AVConfig {
     // 通用设置（录制时为文件路径，推流时为RTMP/RTSP路径）
-    std::string path;
+    std::string     path_;
 
-    // 视频参数
-    VideoConfig videoCfg;
+    // 视频编码器参数
+    VideoCodecCfg   videoCodecCfg_;
 
-    // 音频参数 (新增)
-    AudioConfig audioCfg;
+    // 音频编码器参数
+    AudioCodecCfg   audioCodecCfg_;
+
+    // 录音设备参数
+    AudioFormat    audioFmt_;
 }AVConfig;

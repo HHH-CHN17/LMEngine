@@ -69,7 +69,8 @@ CAudioEncoder::~CAudioEncoder()
     cleanup();
 }
 
-bool CAudioEncoder::initialize(int sampleRate, int channels, long long bitrate)
+//bool CAudioEncoder::initialize(int sampleRate, int channels, long long bitrate)
+bool CAudioEncoder::initialize(const AudioCodecCfg& dstFmt, const AudioFormat& srcFmt)
 {
     cleanup();
 
@@ -88,13 +89,14 @@ bool CAudioEncoder::initialize(int sampleRate, int channels, long long bitrate)
     }
 
     // 3. 设置编码器参数 (目标格式)
-    codecCtx_->bit_rate = bitrate;
-    codecCtx_->sample_rate = sampleRate;
-    codecCtx_->channels = channels;
-    codecCtx_->channel_layout = av_get_default_channel_layout(channels);
+    codecCtx_->bit_rate = dstFmt.bit_rate_;
+    codecCtx_->sample_rate = dstFmt.sample_rate_;
+    codecCtx_->channels = dstFmt.channels_;
+    codecCtx_->channel_layout = dstFmt.channel_layout_;
     // AAC 编码器通常使用 Planar 浮点数格式 (FLTP) 以获得最佳质量
-    codecCtx_->sample_fmt = AV_SAMPLE_FMT_FLTP;
-    codecCtx_->time_base = { 1, sampleRate }; // 时间基以采样率为单位
+    codecCtx_->sample_fmt = dstFmt.sample_fmt_;
+    codecCtx_->time_base = dstFmt.time_base_; // 时间基以采样率为单位
+    codecCtx_->flags |= dstFmt.flags_;
 
     // 4. 打开编码器
     int ret = avcodec_open2(codecCtx_, codec, nullptr);
@@ -104,13 +106,22 @@ bool CAudioEncoder::initialize(int sampleRate, int channels, long long bitrate)
         return false;
     }
 
+    auto qt2FFmpeg_sampleFmt = [](const AudioFormat& srcFmt)->AVSampleFormat
+        {
+            if (srcFmt.sample_size_ == 16 && srcFmt.sample_fmt_ == QAudioFormat::SignedInt)
+            {
+                return AV_SAMPLE_FMT_S16;
+            }
+            return AV_SAMPLE_FMT_NONE;
+        };
+
     // 5. 初始化重采样上下文 (SwrContext)
     // 因为我们从 CAudioCapturer 接收的是 S16 Packed 格式，但编码器需要 FLTP Planar 格式
     swrCtx_ = swr_alloc_set_opts(nullptr,
         // 目标参数 (编码器想要的)
         codecCtx_->channel_layout, codecCtx_->sample_fmt, codecCtx_->sample_rate,
         // 源参数 (我们提供的)
-        codecCtx_->channel_layout, AV_SAMPLE_FMT_S16, sampleRate,
+        av_get_default_channel_layout(srcFmt.channels_), qt2FFmpeg_sampleFmt(srcFmt), srcFmt.sample_rate_,
         0, nullptr);
     if (!swrCtx_) 
     {
@@ -192,6 +203,11 @@ void CAudioEncoder::setStream(AVStream* stream)
     stream_ = stream;
 }
 
+void CAudioEncoder::setTimeBase(AVRational timeBase)
+{
+    timeBase_ = timeBase;
+}
+
 int CAudioEncoder::getFrameSize() const
 {
     return codecCtx_ ? codecCtx_->frame_size : 0;
@@ -242,6 +258,14 @@ QVector<AVPacket*> CAudioEncoder::doEncode(AVFrame* frame)
         {
             av_packet_rescale_ts(pkt, codecCtx_->time_base, stream_->time_base);
             pkt->stream_index = stream_->index;
+        }
+        else if (timeBase_.den != 0)
+        {
+            av_packet_rescale_ts(pkt, codecCtx_->time_base, timeBase_);
+        }
+        else
+        {
+            qWarning() << "Audio Encoder: No time_base.";
         }
 
         packetList.append(pkt);

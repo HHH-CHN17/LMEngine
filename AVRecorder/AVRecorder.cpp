@@ -77,20 +77,20 @@ CAVRecorder* CAVRecorder::GetInstance()
     return &objAVRecorder;
 }
 
-QAudioFormat CAVRecorder::initAudioFormat(const AVConfig& config)
+QAudioFormat CAVRecorder::setAudioFormat(const AudioFormat& config)
 {
     QAudioFormat audioFormat;
-    audioFormat.setSampleRate(config.audioCfg.audio_sample_rate);
-    audioFormat.setChannelCount(config.audioCfg.audio_channel_count);
-    audioFormat.setSampleSize(16);
-    audioFormat.setSampleType(QAudioFormat::SignedInt);
-    audioFormat.setByteOrder(QAudioFormat::LittleEndian);
-    audioFormat.setCodec("audio/pcm");
+    audioFormat.setSampleRate(config.sample_rate_);
+    audioFormat.setChannelCount(config.channels_);
+    audioFormat.setSampleSize(config.sample_size_);
+    audioFormat.setSampleType(config.sample_fmt_);
+    audioFormat.setByteOrder(config.byte_order_);
+    audioFormat.setCodec(config.codec_);
 
     return audioFormat;
 }
 
-bool CAVRecorder::initialize(const AVConfig& config)
+bool CAVRecorder::initialize(AVConfig& config)
 {
     if (isRecording_) 
     {
@@ -103,7 +103,7 @@ bool CAVRecorder::initialize(const AVConfig& config)
 
     // ------------------------- muxer初始化 -------------------------
     muxer_.reset(new CMuxer{});
-    if (!muxer_->initialize(config_.path.c_str())) 
+    if (!muxer_->initialize(config_.path_.c_str())) 
     {
         qCritical() << "Failed to initialize Muxer.";
         cleanup();
@@ -112,7 +112,7 @@ bool CAVRecorder::initialize(const AVConfig& config)
 
     // ------------------------- 视频编码器初始化 -------------------------
     videoEncoder_.reset(new CVideoEncoder{});
-    if (!videoEncoder_->initialize(config_.videoCfg)) 
+    if (!videoEncoder_->initialize(config_.videoCodecCfg_)) 
     {
         qCritical() << "Failed to initialize Video Encoder.";
         cleanup();
@@ -128,8 +128,8 @@ bool CAVRecorder::initialize(const AVConfig& config)
 
     // ------------------------- 录音设备初始化 -------------------------
     audioCapturer_.reset(new CAudioCapturer{});
-    QAudioFormat audioFormat = initAudioFormat(config);
-    if (!audioCapturer_->initialize(audioFormat)) 
+    QAudioFormat audioFormat = setAudioFormat(config.audioFmt_);
+    if (!audioCapturer_->initialize(audioFormat, config.audioFmt_))
     {
         qCritical() << "Failed to initialize Audio Capturer.";
         cleanup();
@@ -138,12 +138,8 @@ bool CAVRecorder::initialize(const AVConfig& config)
 
     // ------------------------- 音频编码器初始化 -------------------------
     audioEncoder_.reset(new CAudioEncoder{});
-    const QAudioFormat& finalAudioFormat = audioCapturer_->getAudioFormat();
-    if (!audioEncoder_->initialize(
-			finalAudioFormat.sampleRate(),
-			finalAudioFormat.channelCount(),
-			config_.audioCfg.audio_bitrate)
-        )
+    //const QAudioFormat& finalAudioFormat = audioCapturer_->getAudioFormat();
+    if (!audioEncoder_->initialize(config.audioCodecCfg_, config.audioFmt_))
     {
         qCritical() << "Failed to initialize Audio Encoder.";
         cleanup();

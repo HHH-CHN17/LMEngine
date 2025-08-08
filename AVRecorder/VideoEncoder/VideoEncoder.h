@@ -24,7 +24,7 @@ public:
 
 public:
     // 初始化视频编码器
-    bool initialize(const VideoConfig& cfg);
+    bool initialize(const VideoCodecCfg& cfg);
 
     /**
      * @brief 编码一帧视频数据。
@@ -44,6 +44,8 @@ public:
      */
     void setStream(AVStream* stream);
 
+    void setTimeBase(AVRational timeBase);
+
     // 提供对编码器上下文的只读访问，以便 Muxer 可以从中获取参数
     const AVCodecContext* getCodecContext() const { return codecCtx_; }
 
@@ -60,6 +62,7 @@ private:
     SwsContext* swsCtx_ = nullptr;    // 用于 RGB -> YUV 的转换
 
     AVStream* stream_ = nullptr; // Muxer 创建的视频流
+    AVRational timeBase_{};         // 如果没有avstream，则需要设置timeBase
 
     // 编码参数
     int inWidth_ = 0;

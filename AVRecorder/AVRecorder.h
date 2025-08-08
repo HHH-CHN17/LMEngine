@@ -27,7 +27,7 @@ public:
     static CAVRecorder* GetInstance();
 
 public:
-    bool initialize(const AVConfig& config);
+    bool initialize(AVConfig& config);
 
     void startRecording();
 
@@ -44,7 +44,7 @@ public:
     bool isRecording() const;
 
 private:
-    QAudioFormat initAudioFormat(const AVConfig& config);
+    QAudioFormat setAudioFormat(const AudioFormat& config);
 
 private:
     // 清理所有资源

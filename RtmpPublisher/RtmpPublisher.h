@@ -28,7 +28,7 @@ public:
     static CRtmpPublisher* GetInstance();
 
 public:
-    bool initialize(const AVConfig& config);
+    bool initialize(AVConfig& config);
 
     void startPush();
 
@@ -45,7 +45,7 @@ public:
     bool isRecording() const;
 
 private:
-    QAudioFormat initAudioFormat(const AVConfig& config);
+    QAudioFormat initAudioFormat(const AudioFormat& config);
 
 private:
     // 清理所有资源

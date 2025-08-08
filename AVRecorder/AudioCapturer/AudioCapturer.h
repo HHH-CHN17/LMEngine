@@ -9,6 +9,7 @@
 #include <QBuffer>
 #include <QScopedPointer>
 #include "AVRecorder/AudioCapturer/IOBuffer/IOBuffer.h"
+#include "Common/DataDefine.h"
 
 class CAudioCapturer : public QObject
 {
@@ -18,8 +19,8 @@ public:
     explicit CAudioCapturer(QObject* parent = nullptr);
     ~CAudioCapturer();
 
-    // 初始化音频捕获设备，返回是否成功
-    bool initialize(const QAudioFormat& format);
+    // 初始化音频捕获设备，同时将最终录音设备支持的音频格式存于audioFmt中
+    bool initialize(const QAudioFormat& format, AudioFormat& audioFmt);
 
     // 开始捕获
     void start();

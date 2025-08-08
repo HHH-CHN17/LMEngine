@@ -29,12 +29,11 @@ public:
 
     /**
      * @brief 初始化音频编码器。
-     * @param sampleRate 采样率 (e.g., 48000)。
-     * @param channels 声道数 (e.g., 2 for stereo)。
-     * @param bitrate 音频比特率 (e.g., 128000)。
+     * @param dstFmt
+     * @param srcFmt
      * @return 成功返回 true。
      */
-    bool initialize(int sampleRate, int channels, long long bitrate);
+    bool initialize(const AudioCodecCfg& dstFmt, const AudioFormat& srcFmt);
 
     /**
      * @brief 编码一帧音频数据。
@@ -55,6 +54,12 @@ public:
      * @param stream Muxer 创建的音频流。
      */
     void setStream(AVStream* stream);
+
+    /**
+     * @brief 设置后续pkt需要转换的时间戳，如果没调用setStream，则需要调用该函数。
+     * @param timeBase 手动设置的时间基。
+     */
+    void setTimeBase(AVRational timeBase);
 
     // 提供对编码器上下文的只读访问
     const AVCodecContext* getCodecContext() const { return codecCtx_; }
@@ -78,7 +83,8 @@ private:
     AVFrame* resampleFrame_ = nullptr; // 用于存放重采样后的 FLTP Planar 数据 (如果需要)
     SwrContext* swrCtx_ = nullptr;    // 用于 PCM 格式和采样率的转换
 
-    AVStream* stream_ = nullptr; // Muxer 创建的音频流
+    AVStream* stream_ = nullptr;    // Muxer 创建的音频流
+    AVRational timeBase_{};         // 如果没有avstream，则需要设置timeBase
 
     // 用于计算PTS
     int64_t ptsCnt_ = 0;

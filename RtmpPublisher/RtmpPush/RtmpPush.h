@@ -23,38 +23,17 @@ extern "C" {
  */
 class CRtmpPush {
 public:
-    /**
-     * @brief 构造函数
-     * @param log_level librtmp 日志级别 (可选)
-     */
     explicit CRtmpPush(int log_level = RTMP_LOGINFO);
 
-    /**
-     * @brief 析构函数
-     * 自动断开连接并清理资源。
-     */
     ~CRtmpPush();
 
-    // 禁止拷贝构造和赋值 (根据需要可以实现移动语义)
     CRtmpPush(const CRtmpPush&) = delete;
     CRtmpPush& operator=(const CRtmpPush&) = delete;
 
-    /**
-     * @brief 连接到 RTMP 服务器
-     * @param rtmp_url RTMP 推流地址 (e.g., "rtmp://server/app/stream")
-     * @return true 连接成功, false 连接失败
-     */
     bool connect(const char* rtmp_url);
 
-    /**
-     * @brief 断开与 RTMP 服务器的连接
-     */
     void disconnect();
 
-    /**
-     * @brief 检查是否已连接到 RTMP 服务器
-     * @return true 已连接, false 未连接
-     */
     bool isConnected() const;
 
     /**

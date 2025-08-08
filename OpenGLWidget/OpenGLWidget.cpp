@@ -325,21 +325,53 @@ void OpenGLWidget::resizeGL(int w, int h)
 	}
 	org_wh = w * h;
 }
-
 void OpenGLWidget::startRecord(avACT action)
 {
+	AVRational framerate{ 30, 1 };
+	VideoCodecCfg videoCodecCfg{
+		recordW_, recordH_,
+		1920, 1080,
+		framerate, {1, 30},	// 时间基与帧率保持一致
+		static_cast<int>(av_q2d(framerate)),	// 设置 GOP 大小：1秒一个I帧
+		1,		// 允许B帧
+		AV_PIX_FMT_YUV420P,
+		AV_CODEC_FLAG_GLOBAL_HEADER,
+		AV_CODEC_ID_H264,
+		2000000
+	};
+
+	int sample_rate = 48000;
+	int	channels = 2;
+	AudioCodecCfg audioCodecCfg{
+		128000, sample_rate, channels,
+		av_get_default_channel_layout(channels),
+		AV_SAMPLE_FMT_FLTP,		// AAC 编码器通常使用 Planar 浮点数格式 (FLTP) 以获得最佳质量
+		{ 1, sample_rate },		// 时间基以采样率为单位
+		AV_CODEC_FLAG_GLOBAL_HEADER	// 音频也加一个该标志，这样音视频的公共头（AudioSpecificConfig，sps，pps）就存储于codecCtx->extradata中了
+	};
+
+	AudioFormat audioFmt{
+		audioCodecCfg.sample_rate_,
+		audioCodecCfg.channels_,
+		16,
+		QAudioFormat::SignedInt,
+		QAudioFormat::LittleEndian,
+		"audio/pcm"
+	};
+
 	AVConfig config{
 		std::string{},
-		VideoConfig{recordW_, recordH_, 1920, 1080, 30, 2000000},
-		AudioConfig{48000, 2, 128000}
+		videoCodecCfg,
+		audioCodecCfg,
+		audioFmt
 	};
 
 	if (action == avACT::RECORD)
 	{
 		// initialize，随后在paintGL中记录
 		QDateTime dateTime = QDateTime::currentDateTime();
-		config.path = (qApp->applicationDirPath() + "/" + dateTime.toString("yyyyMMddhhmmss") + ".mp4").toStdString();
-		qDebug() << "start record video to: " << config.path.c_str();
+		config.path_ = (qApp->applicationDirPath() + "/" + dateTime.toString("yyyyMMddhhmmss") + ".mp4").toStdString();
+		qDebug() << "start record video to: " << config.path_.c_str();
 
 
 		Q_ASSERT(CAVRecorder::GetInstance()->initialize(config));
@@ -350,10 +382,10 @@ void OpenGLWidget::startRecord(avACT action)
 	else if (action == avACT::RTMPPUSH)
 	{
 		// 注意：rtmp推流时，为了保证视频数据的及时性，需要考虑降低帧率，缩短IDR帧间隔，这些参数需要修改AVCodecContext的参数
-		config.path = "";
-		qDebug() << "connect RTMP server to: " << config.path.c_str();
+		config.path_ = "";
+		qDebug() << "connect RTMP server to: " << config.path_.c_str();
 
-		CRtmpPublisher::GetInstance()->initialize(config);
+		Q_ASSERT(CRtmpPublisher::GetInstance()->initialize(config));
 		isRtmpPush_ = true;
 	}
 	else if (action == avACT::RTSPPUSH)
@@ -431,16 +463,16 @@ void OpenGLWidget::saveImage(GLubyte* ptr)
 void OpenGLWidget::recordAV(GLubyte* ptr)
 {
 	if (!isRecording_)
-	{
 		qDebug() << "can't record video!";
-	}
 	//assert(CAVRecorder::GetInstance()->recording(ptr));
 	CAVRecorder::GetInstance()->recording(ptr);
 }
 
 void OpenGLWidget::rtmpPush(GLubyte* ptr)
 {
-	
+	if (!isRtmpPush_)
+		qDebug() << "can't push to rtmp server!";
+	assert(CRtmpPublisher::GetInstance()->pushing(ptr));
 }
 
 void OpenGLWidget::rtspPush(GLubyte* ptr)

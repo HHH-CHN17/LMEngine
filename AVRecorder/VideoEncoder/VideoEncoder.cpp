@@ -67,14 +67,14 @@ CVideoEncoder::~CVideoEncoder()
     cleanup();
 }
 
-bool CVideoEncoder::initialize(const VideoConfig& cfg)
+bool CVideoEncoder::initialize(const VideoCodecCfg& cfg)
 {
     cleanup(); // 清理旧的资源
 
-    inWidth_ = cfg.inWidth;
-    inHeight_ = cfg.inHeight;
-    outWidth_ = cfg.outWidth;
-    outHeight_ = cfg.outHeight;
+    inWidth_ = cfg.in_width_;
+    inHeight_ = cfg.in_height_;
+    outWidth_ = cfg.out_width_;
+    outHeight_ = cfg.out_height_;
 
     // 1. 查找 H.264 编码器
     const AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_H264);
@@ -91,16 +91,16 @@ bool CVideoEncoder::initialize(const VideoConfig& cfg)
     }
 
     // 3. 设置编码器参数
-    codecCtx_->width = outWidth_;
-    codecCtx_->height = outHeight_;
-    //codecCtx_->bit_rate = cfg.bitrate;
-    codecCtx_->framerate = { cfg.framerate, 1 };
-    codecCtx_->time_base = { 1, cfg.framerate }; // 时间基与帧率保持一致
-    codecCtx_->gop_size = cfg.framerate; // 设置 GOP 大小，例如1秒一个I帧
-    codecCtx_->max_b_frames = 1;     // 允许B帧以提高压缩率
-    codecCtx_->pix_fmt = AV_PIX_FMT_YUV420P;
-    codecCtx_->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-    codecCtx_->codec_id = AV_CODEC_ID_H264;
+    codecCtx_->width = cfg.out_width_;
+    codecCtx_->height = cfg.out_height_;
+    //codecCtx_->bit_rate = cfg.bit_rate;
+    codecCtx_->framerate = cfg.framerate_;
+    codecCtx_->time_base = cfg.time_base_; // 时间基与帧率保持一致
+    codecCtx_->gop_size = cfg.gop_size_; // 设置 GOP 大小，例如1秒一个I帧
+    codecCtx_->max_b_frames = cfg.max_b_frames_;     // 允许B帧以提高压缩率
+    codecCtx_->pix_fmt = cfg.pix_fmt_;
+    codecCtx_->flags |= cfg.flags_;
+    codecCtx_->codec_id = cfg.codec_id_;
 
     // 设置一些 H.264 的优化选项
     if (codec->id == AV_CODEC_ID_H264) {
@@ -118,7 +118,8 @@ bool CVideoEncoder::initialize(const VideoConfig& cfg)
     }
 
     // 5. 初始化格式转换上下文 (SwsContext)
-    swsCtx_ = sws_getContext(inWidth_, inHeight_, AV_PIX_FMT_RGBA,
+    swsCtx_ = sws_getContext(
+        inWidth_, inHeight_, AV_PIX_FMT_RGBA,
         outWidth_, outHeight_, AV_PIX_FMT_YUV420P,
         SWS_BICUBIC, nullptr, nullptr, nullptr);
     if (!swsCtx_) {
@@ -191,6 +192,11 @@ void CVideoEncoder::setStream(AVStream* stream)
     }*/
 }
 
+void CVideoEncoder::setTimeBase(AVRational timeBase)
+{
+    timeBase_ = timeBase;
+}
+
 QVector<AVPacket*> CVideoEncoder::doEncode(AVFrame* frame)
 {
     QVector<AVPacket*> packetList;
@@ -231,9 +237,13 @@ QVector<AVPacket*> CVideoEncoder::doEncode(AVFrame* frame)
             av_packet_rescale_ts(pkt, codecCtx_->time_base, stream_->time_base);
             pkt->stream_index = stream_->index;
         }
+        else if (timeBase_.den != 0)
+        {
+            av_packet_rescale_ts(pkt, codecCtx_->time_base, timeBase_);
+        }
         else
         {
-            qWarning() << "Video Encoder: No Stream.";
+            qWarning() << "Video Encoder: No time_base.";
         }
 
         packetList.push_back(pkt);

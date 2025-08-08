@@ -77,20 +77,20 @@ CRtmpPublisher* CRtmpPublisher::GetInstance()
     return &objAVRecorder;
 }
 
-QAudioFormat CRtmpPublisher::initAudioFormat(const AVConfig& config)
+QAudioFormat CRtmpPublisher::initAudioFormat(const AudioFormat& config)
 {
     QAudioFormat audioFormat;
-    audioFormat.setSampleRate(config.audioCfg.audio_sample_rate);
-    audioFormat.setChannelCount(config.audioCfg.audio_channel_count);
-    audioFormat.setSampleSize(16);
-    audioFormat.setSampleType(QAudioFormat::SignedInt);
-    audioFormat.setByteOrder(QAudioFormat::LittleEndian);
-    audioFormat.setCodec("audio/pcm");
+    audioFormat.setSampleRate(config.sample_rate_);
+    audioFormat.setChannelCount(config.channels_);
+    audioFormat.setSampleSize(config.sample_size_);
+    audioFormat.setSampleType(config.sample_fmt_);
+    audioFormat.setByteOrder(config.byte_order_);
+    audioFormat.setCodec(config.codec_);
 
     return audioFormat;
 }
 
-bool CRtmpPublisher::initialize(const AVConfig& config)
+bool CRtmpPublisher::initialize(AVConfig& config)
 {
     if (isRecording_)
     {
@@ -103,7 +103,7 @@ bool CRtmpPublisher::initialize(const AVConfig& config)
 
     // ------------------------- rtmpPush初始化 -------------------------
     rtmpPush_.reset(new CRtmpPush{});
-    if (!rtmpPush_->connect(config_.path.c_str()))
+    if (!rtmpPush_->connect(config_.path_.c_str()))
     {
         qCritical() << "Failed to initialize rtmpPush.";
         cleanup();
@@ -112,17 +112,19 @@ bool CRtmpPublisher::initialize(const AVConfig& config)
 
     // ------------------------- 视频编码器初始化 -------------------------
     videoEncoder_.reset(new CVideoEncoder{});
-    if (!videoEncoder_->initialize(config_.videoCfg))
+    if (!videoEncoder_->initialize(config_.videoCodecCfg_))
     {
         qCritical() << "Failed to initialize Video Encoder.";
         cleanup();
         return false;
     }
+    // 此处设置timebase后，在编码成packet时会自动将时间基转换为此处设置的时间基
+    videoEncoder_->setTimeBase({ 1, 1000 });
 
     // ------------------------- 录音设备初始化 -------------------------
     audioCapturer_.reset(new CAudioCapturer{});
-    QAudioFormat audioFormat = initAudioFormat(config);
-    if (!audioCapturer_->initialize(audioFormat))
+    QAudioFormat audioFormat = initAudioFormat(config.audioFmt_);
+    if (!audioCapturer_->initialize(audioFormat, config.audioFmt_))
     {
         qCritical() << "Failed to initialize Audio Capturer.";
         cleanup();
@@ -131,27 +133,24 @@ bool CRtmpPublisher::initialize(const AVConfig& config)
 
     // ------------------------- 音频编码器初始化 -------------------------
     audioEncoder_.reset(new CAudioEncoder{});
-    const QAudioFormat& finalAudioFormat = audioCapturer_->getAudioFormat();
-    if (!audioEncoder_->initialize(
-        finalAudioFormat.sampleRate(),
-        finalAudioFormat.channelCount(),
-        config_.audioCfg.audio_bitrate)
-        )
+    //const QAudioFormat& finalAudioFormat = audioCapturer_->getAudioFormat();
+    if (!audioEncoder_->initialize(config.audioCodecCfg_, config.audioFmt_))
     {
         qCritical() << "Failed to initialize Audio Encoder.";
         cleanup();
         return false;
     }
+    audioEncoder_->setTimeBase({ 1, 1000 });
 
     // ------------------------- 检查是否已连接 -------------------------
     if (!rtmpPush_->isConnected())
     {
-        qCritical() << "Failed to write muxer header.";
+        qCritical() << "Failed to connect rtmp server.";
         cleanup();
         return false;
     }
 
-    qInfo() << "Recorder Controller initialized successfully.";
+    qInfo() << "RtmpPublisher initialized successfully.";
     return true;
 }
 
@@ -178,14 +177,20 @@ void CRtmpPublisher::stopPush()
     // ------------------------- 清空视频编码器缓存 -------------------------
     QVector<AVPacket*> videoPackets = videoEncoder_->flush();
     for (AVPacket* pkt : videoPackets) {
-        rtmpPush_->writePacket(pkt);
+        // 该流程为同步流程，随后改为异步流程时需要深拷贝
+        bool isKeyFrame = (pkt->flags & AV_PKT_FLAG_KEY) != 0;
+        rtmpPush_->sendVideo(pkt->data, pkt->size, pkt->dts, isKeyFrame);
+        av_packet_unref(pkt);
         av_packet_free(&pkt);
     }
 
     // ------------------------- 清空音频编码器中缓存 -------------------------
     QVector<AVPacket*> audioPackets = audioEncoder_->flush();
     for (AVPacket* pkt : audioPackets) {
-        rtmpPush_->writePacket(pkt);
+        // 该流程为同步流程，随后改为异步流程时需要深拷贝
+        bool isKeyFrame = (pkt->flags & AV_PKT_FLAG_KEY) != 0;
+        rtmpPush_->sendAudio(pkt->data, pkt->size, pkt->dts, isKeyFrame);
+        av_packet_unref(pkt);
         av_packet_free(&pkt);
     }
 
@@ -205,8 +210,10 @@ bool CRtmpPublisher::pushing(const unsigned char* rgbData)
     QVector<AVPacket*> videoPackets = videoEncoder_->encode(rgbData);
     for (AVPacket* pkt : videoPackets)
     {
-        rtmpPush_->writePacket(pkt);
-        //av_packet_unref(pkt);
+        // 该流程为同步流程，随后改为异步流程时需要深拷贝
+        bool isKeyFrame = (pkt->flags & AV_PKT_FLAG_KEY) != 0;
+        rtmpPush_->sendVideo(pkt->data, pkt->size, pkt->dts, isKeyFrame);
+        av_packet_unref(pkt);
         av_packet_free(&pkt);
     }
 
@@ -235,7 +242,9 @@ bool CRtmpPublisher::pushing(const unsigned char* rgbData)
                 << "size:" << pkt->size
                 << "pts:" << pkt->pts
                 << "dts:" << pkt->dts;*/
-            rtmpPush_->writePacket(pkt);
+        	// 该流程为同步流程，随后改为异步流程时需要深拷贝
+            bool isKeyFrame = (pkt->flags & AV_PKT_FLAG_KEY) != 0;
+            rtmpPush_->sendAudio(pkt->data, pkt->size, pkt->dts, isKeyFrame);
             av_packet_unref(pkt);
             av_packet_free(&pkt);
         }

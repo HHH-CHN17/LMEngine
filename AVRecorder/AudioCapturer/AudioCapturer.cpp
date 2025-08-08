@@ -52,7 +52,7 @@ QAudioDeviceInfo CAudioCapturer::getDeviceInfo(const char* deviceName)
     return targetDevice;
 }
 
-bool CAudioCapturer::initialize(const QAudioFormat& format)
+bool CAudioCapturer::initialize(const QAudioFormat& format, AudioFormat& audioFmt)
 {
     if (isInitialized_) {
         qWarning() << "Audio capturer already initialized.";
@@ -78,6 +78,9 @@ bool CAudioCapturer::initialize(const QAudioFormat& format)
     audioIOBuffer_->open(QIODevice::ReadWrite | QIODevice::Append);
 
     // ------------------------- ÆäËû -------------------------
+    audioFmt.sample_rate_ = format_.sampleRate();
+    audioFmt.channels_ = format_.channelCount();
+
     isInitialized_ = true;
     qInfo() << "Audio capturer initialized successfully with format:\n"
 			<< "Sample Rate:" << format_.sampleRate() << "\n"
