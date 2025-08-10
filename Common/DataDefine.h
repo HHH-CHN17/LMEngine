@@ -6,11 +6,13 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <QDebug>
+#include <QAudioFormat>
 
 extern "C" {
 #include <libavutil/rational.h>
 #include <libavutil/pixfmt.h>
 #include <libavutil/samplefmt.h>
+#include <libavcodec/avcodec.h>
 }
 
 // ------------------------- YUV渲染所需数据 -------------------------

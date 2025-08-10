@@ -1,4 +1,5 @@
 #pragma once
+
 #include "AudioEncoder/AudioEncoder.h"
 #include "Muxer/Muxer.h"
 #include "VideoEncoder/VideoEncoder.h"
@@ -15,6 +16,7 @@ extern "C" {
 #include <QQueue>
 #include <QThread>
 #include <QWaitCondition>
+#include <QFile>
 #include "AVRecorder/AudioCapturer/AudioCapturer.h"
 #include "Common/DataDefine.h"
 
@@ -55,6 +57,9 @@ private:
     QScopedPointer<CVideoEncoder> videoEncoder_;
     QScopedPointer<CAudioEncoder> audioEncoder_;
     QScopedPointer<CAudioCapturer> audioCapturer_;
+
+	QFile* h264File = nullptr; // 用于调试，保存H264数据
+	QFile* aacFile = nullptr; // 用于调试，保存AAC数据
 
     // 录制参数
     AVConfig config_;

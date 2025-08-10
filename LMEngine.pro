@@ -10,30 +10,12 @@ CONFIG += c++17
 
 CONFIG += resources_big
 
-CONFIG(release_with_debug, release|debug) {
-    # 继承 release 配置
-    CONFIG += release
-
-    # 移除 Qt 对 DEBUG 宏的定义，使其行为更像一个真正的 release 版本
-    DEFINES -= QT_DEBUG
-
-    # 添加调试符号
-    QMAKE_CXXFLAGS += -g
-    QMAKE_CFLAGS += -g
-    QMAKE_LFLAGS += -g
-
-    # (可选) 调整优化级别
-    # QMAKE_CXXFLAGS -= -O2
-    # QMAKE_CXXFLAGS += -Og
-}
-
 LIBS += -lOpenGL32 -lglu32
 
 INCLUDEPATH += $$PWD/lib/win32/libglew/include
 LIBS += $$PWD/lib/win32/libglew/lib/glew32.lib
 
 INCLUDEPATH += $$PWD/lib/win32/libOpenCV/include
-
 LIBS += -L$$PWD/lib/win32/libOpenCV/lib \
     -llibopencv_core331 \
     -llibopencv_highgui331 \
@@ -63,6 +45,13 @@ LIBS +=     $$PWD/lib/win32/libFFmpeg/lib/libavformat.dll.a \
 INCLUDEPATH += $$PWD/lib/win32/libfaac/include
 LIBS += -L$$PWD/lib/win32/libfaac/lib -lfaac
 
+INCLUDEPATH += $$PWD/lib/win32/librtmp/include
+LIBS += -L$$PWD/lib/win32/librtmp/lib \
+        -lrtmp.dll \
+        -lssl.dll \
+        -lcrypto.dll \
+        -lz \
+        -lws2_32
 
 SOURCES += \
     ./main.cpp \
@@ -83,7 +72,9 @@ SOURCES += \
     ./AVRecorder/AudioCapturer/AudioCapturer.cpp \
     ./AVRecorder/AudioCapturer/IOBuffer/IOBuffer.cpp \
     ./Common/Camera/GLCamera.cpp \
-    ./Common/ShaderProgram/GLShaderProgram.cpp
+    ./Common/ShaderProgram/GLShaderProgram.cpp \
+    ./RtmpPublisher/RtmpPublisher.cpp \
+    ./RtmpPublisher/RtmpPush/RtmpPush.cpp
 
 INCLUDEPATH += ./Common
 INCLUDEPATH += ./Common/Camera
@@ -104,6 +95,8 @@ INCLUDEPATH += ./AVRecorder/AudioEncoder
 INCLUDEPATH += ./AVRecorder/VideoEncoder
 INCLUDEPATH += ./AVRecorder/AudioCapturer
 INCLUDEPATH += ./AVRecorder/AudioCapturer/IOBuffer
+INCLUDEPATH += ./RtmpPublisher
+INCLUDEPATH += ./RtmpPublisher/RtmpPush
 
 HEADERS += \
     ./MainWidget.h \
@@ -125,7 +118,9 @@ HEADERS += \
     ./Common/ShaderProgram/GLShaderProgram.h \
     ./Common/Camera/GLCamera.h \
     ./Common/DataDefine.h \
-    ./Common/MsgQueue.h
+    ./Common/MsgQueue.h \
+    ./RtmpPublisher/RtmpPublisher.h \
+    ./RtmpPublisher/RtmpPush/RtmpPush.h
 
 FORMS += \
     ./MainWidget.ui
@@ -137,3 +132,28 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 
 RESOURCES += \
     ./LMEngine.qrc
+
+# 定义所有需要复制的DLL的源目录
+DLL_RTMP_PATH = $$PWD/lib/win32/librtmp/bin # (假设您把rtmp的dll放这里)
+DLL_FFMPEG_PATH = $$PWD/lib/win32/libFFmpeg/bin
+DLL_OPENCV_PATH = $$PWD/lib/win32/libOpenCV/bin
+# ...为其他库也定义类似的路径
+
+# 获取构建目标（可执行文件）的路径
+DESTDIR = $$OUT_PWD/
+
+# mingw平台下才执行此操作
+CONFIG(release, debug|release) {
+    mingw: {
+        copy_dlls.target = $$DESTDIR
+        # 执行多次复制命令，把所有源目录的dll都复制过去
+        copy_dlls.commands += $(COPY_DIR) $$DLL_RTMP_PATH $$DESTDIR
+        copy_dlls.commands += $(COPY_DIR) $$DLL_FFMPEG_PATH $$DESTDIR
+        copy_dlls.commands += $(COPY_DIR) $$DLL_OPENCV_PATH $$DESTDIR
+        # ...为其他库也添加复制命令
+
+        QMAKE_EXTRA_TARGETS += copy_dlls
+        PRE_TARGETDEPS += $$DESTDIR
+        POST_TARGETDEPS += copy_dlls
+    }
+}

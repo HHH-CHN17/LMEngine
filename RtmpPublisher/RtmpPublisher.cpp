@@ -77,15 +77,15 @@ CRtmpPublisher* CRtmpPublisher::GetInstance()
     return &objAVRecorder;
 }
 
-QAudioFormat CRtmpPublisher::initAudioFormat(const AudioFormat& config)
+QAudioFormat CRtmpPublisher::initAudioFormat(const AudioFormat& fmt)
 {
     QAudioFormat audioFormat;
-    audioFormat.setSampleRate(config.sample_rate_);
-    audioFormat.setChannelCount(config.channels_);
-    audioFormat.setSampleSize(config.sample_size_);
-    audioFormat.setSampleType(config.sample_fmt_);
-    audioFormat.setByteOrder(config.byte_order_);
-    audioFormat.setCodec(config.codec_);
+    audioFormat.setSampleRate(fmt.sample_rate_);
+    audioFormat.setChannelCount(fmt.channels_);
+    audioFormat.setSampleSize(fmt.sample_size_);
+    audioFormat.setSampleType(fmt.sample_fmt_);
+    audioFormat.setByteOrder(fmt.byte_order_);
+    audioFormat.setCodec(fmt.codec_);
 
     return audioFormat;
 }
@@ -159,45 +159,32 @@ void CRtmpPublisher::startPush()
     if (isRecording_) return;
 
     audioCapturer_->start(); // 开始录音，填充音频缓冲区
+
+    // ------------------------- 发送流媒体数据之前，需要发送H.264和AAC的配置信息 -------------------------
+
+    std::vector<uint8_t> sps{}, pps{}, asc{};
+    if (!getH264Config(sps, pps))
+    {
+        qCritical() << "Failed to get H.264 config.";
+        cleanup();
+        return;
+	}
+
+    if (!getAacConfig(asc))
+    {
+        qCritical() << "Failed to get AAC config.";
+        cleanup();
+        return;
+    }
+
+    rtmpPush_->setAVConfig(
+        sps.data(), sps.size(), 
+        pps.data(), pps.size(), 
+        asc.data(), asc.size()
+    );
+
     isRecording_ = true;
     qInfo() << "Recording started.";
-}
-
-void CRtmpPublisher::stopPush()
-{
-    if (!isRecording_) return;
-
-    isRecording_ = false;
-    qInfo() << "Stopping pushing...";
-
-    audioCapturer_->stop(); // 停止录音
-
-    qInfo() << "Flushing encoders...";
-
-    // ------------------------- 清空视频编码器缓存 -------------------------
-    QVector<AVPacket*> videoPackets = videoEncoder_->flush();
-    for (AVPacket* pkt : videoPackets) {
-        // 该流程为同步流程，随后改为异步流程时需要深拷贝
-        bool isKeyFrame = (pkt->flags & AV_PKT_FLAG_KEY) != 0;
-        rtmpPush_->sendVideo(pkt->data, pkt->size, pkt->dts, isKeyFrame);
-        av_packet_unref(pkt);
-        av_packet_free(&pkt);
-    }
-
-    // ------------------------- 清空音频编码器中缓存 -------------------------
-    QVector<AVPacket*> audioPackets = audioEncoder_->flush();
-    for (AVPacket* pkt : audioPackets) {
-        // 该流程为同步流程，随后改为异步流程时需要深拷贝
-        bool isKeyFrame = (pkt->flags & AV_PKT_FLAG_KEY) != 0;
-        rtmpPush_->sendAudio(pkt->data, pkt->size, pkt->dts, isKeyFrame);
-        av_packet_unref(pkt);
-        av_packet_free(&pkt);
-    }
-
-    // ------------------------- 关闭rtmpPush -------------------------
-    rtmpPush_->disconnect();
-    cleanup(); // 清理所有资源
-    qInfo() << "Recording stopped.";
 }
 
 bool CRtmpPublisher::pushing(const unsigned char* rgbData)
@@ -243,8 +230,7 @@ bool CRtmpPublisher::pushing(const unsigned char* rgbData)
                 << "pts:" << pkt->pts
                 << "dts:" << pkt->dts;*/
         	// 该流程为同步流程，随后改为异步流程时需要深拷贝
-            bool isKeyFrame = (pkt->flags & AV_PKT_FLAG_KEY) != 0;
-            rtmpPush_->sendAudio(pkt->data, pkt->size, pkt->dts, isKeyFrame);
+            rtmpPush_->sendAudio(pkt->data, pkt->size, pkt->dts, false);
             av_packet_unref(pkt);
             av_packet_free(&pkt);
         }
@@ -252,6 +238,44 @@ bool CRtmpPublisher::pushing(const unsigned char* rgbData)
 
     return true;
 }
+
+void CRtmpPublisher::stopPush()
+{
+    if (!isRecording_) return;
+
+    isRecording_ = false;
+    qInfo() << "Stopping pushing...";
+
+    audioCapturer_->stop(); // 停止录音
+
+    qInfo() << "Flushing encoders...";
+
+    // ------------------------- 清空视频编码器缓存 -------------------------
+    QVector<AVPacket*> videoPackets = videoEncoder_->flush();
+    for (AVPacket* pkt : videoPackets) {
+        // 该流程为同步流程，随后改为异步流程时需要深拷贝
+        bool isKeyFrame = (pkt->flags & AV_PKT_FLAG_KEY) != 0;
+        rtmpPush_->sendVideo(pkt->data, pkt->size, pkt->dts, isKeyFrame);
+        av_packet_unref(pkt);
+        av_packet_free(&pkt);
+    }
+
+    // ------------------------- 清空音频编码器中缓存 -------------------------
+    QVector<AVPacket*> audioPackets = audioEncoder_->flush();
+    for (AVPacket* pkt : audioPackets) {
+        // 该流程为同步流程，随后改为异步流程时需要深拷贝
+        bool isKeyFrame = (pkt->flags & AV_PKT_FLAG_KEY) != 0;
+        rtmpPush_->sendAudio(pkt->data, pkt->size, pkt->dts, isKeyFrame);
+        av_packet_unref(pkt);
+        av_packet_free(&pkt);
+    }
+
+    // ------------------------- 关闭rtmpPush -------------------------
+    rtmpPush_->disconnect();
+    cleanup(); // 清理所有资源
+    qInfo() << "Recording stopped.";
+}
+
 
 bool CRtmpPublisher::isRecording() const
 {
@@ -264,4 +288,121 @@ void CRtmpPublisher::cleanup()
     videoEncoder_.reset();
     audioEncoder_.reset();
     audioCapturer_.reset();
+}
+
+bool CRtmpPublisher::getH264Config(std::vector<uint8_t>& sps, std::vector<uint8_t>& pps)
+{
+	const AVCodecContext* codecCtx = videoEncoder_->getCodecContext();
+
+	if (!codecCtx || !codecCtx->extradata || codecCtx->extradata_size <= 0 ||
+		!(codecCtx->flags & AV_CODEC_FLAG_GLOBAL_HEADER) ||
+		codecCtx->codec_id != AV_CODEC_ID_H264) 
+    {
+			return false;
+
+    }
+	 const uint8_t* extradata = codecCtx->extradata;
+	 int extradata_size = codecCtx->extradata_size;
+
+    if (extradata_size < 8) { // 至少需要 AVCDecoderConfigurationRecord 的基本头部
+        qCritical() << "Extradata too small.";
+        return false;
+    }
+
+    // 检查是否是 AVCDecoderConfigurationRecord 格式 (通常第一个字节是版本号 1)
+    if (extradata[0] != 1) {
+        qCritical() << "Extradata is not in AVCDecoderConfigurationRecord format.";
+        return false;
+    }
+
+    // 解析 AVCDecoderConfigurationRecord
+    // 布局参考 ISO/IEC 14496-15
+    // offset 0: configurationVersion (1 byte)
+    // offset 1: AVCProfileIndication (1 byte)
+    // offset 2: profile_compatibility (1 byte)
+    // offset 3: AVCLevelIndication (1 byte)
+    // offset 4: lengthSizeMinusOne (2 bits) + reserved (6 bits)
+    // offset 5: numOfSequenceParameterSets (5 bits) + reserved (3 bits)
+    int offset = 5;
+    uint8_t num_sps = extradata[offset] & 0x1F;
+    offset++;
+
+    sps.clear();
+    pps.clear();
+
+    // 提取 SPS
+    for (int i = 0; i < num_sps; ++i) 
+    {
+        if (offset + 2 > extradata_size) 
+        {
+            qCritical() << "Invalid SPS length in extradata.";
+            return false;
+        }
+        uint16_t sps_len = (extradata[offset] << 8) | extradata[offset + 1];
+        offset += 2;
+        if (offset + sps_len > extradata_size) 
+        {
+            qCritical() << "SPS data exceeds extradata size.";
+            return false;
+        }
+        // 通常只处理第一个 SPS
+        if (sps.empty() && sps_len > 0) 
+        {
+            sps.assign(extradata + offset, extradata + offset + sps_len);
+            // std::cout << "Extracted SPS, length: " << sps_len;
+        }
+        offset += sps_len;
+    }
+
+    // 提取 PPS
+    if (offset + 1 > extradata_size) 
+    {
+        qCritical() << "Invalid PPS count in extradata.";
+        return false;
+    }
+    uint8_t num_pps = extradata[offset];
+    offset++;
+
+    for (int i = 0; i < num_pps; ++i) 
+    {
+        if (offset + 2 > extradata_size) 
+        {
+            qCritical() << "Invalid PPS length in extradata.";
+            return false;
+        }
+        uint16_t pps_len = (extradata[offset] << 8) | extradata[offset + 1];
+        offset += 2;
+        if (offset + pps_len > extradata_size) 
+        {
+            qCritical() << "PPS data exceeds extradata size.";
+            return false;
+        }
+        // 通常只处理第一个 PPS
+        if (pps.empty() && pps_len > 0)
+        {
+            pps.assign(extradata + offset, extradata + offset + pps_len);
+            // std::cout << "Extracted PPS, length: " << pps_len;
+        }
+        offset += pps_len;
+    }
+
+	qDebug() << "Extracted SPS size:" << sps.size() << ", PPS size:" << pps.size();
+
+    return !sps.empty() && !pps.empty();
+}
+
+bool CRtmpPublisher::getAacConfig(std::vector<uint8_t>& asc) {
+	const AVCodecContext* codecCtx = audioEncoder_->getCodecContext();
+    if (!codecCtx || !codecCtx->extradata || codecCtx->extradata_size <= 0 ||
+        !(codecCtx->flags & AV_CODEC_FLAG_GLOBAL_HEADER) ||
+        codecCtx->codec_id != AV_CODEC_ID_AAC) 
+    {
+        return false;
+    }
+    // 对于 AAC，extradata 通常就是 AudioSpecificConfig
+    // 但也可能是包含 MP4 Audio Decoder Specific Info 的结构
+    // 最常见和直接的就是 extradata 本身
+    asc.assign(codecCtx->extradata, codecCtx->extradata + codecCtx->extradata_size);
+    return true;
+
 }

@@ -170,6 +170,23 @@ void CAVRecorder::startRecording()
     if (isRecording_) return;
 
     audioCapturer_->start(); // 开始录音，填充音频缓冲区
+
+	h264File = new QFile(qApp->applicationDirPath() + "/" + "h264_data.h264");
+    if (h264File->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qInfo() << "H264 file opened for writing.";
+    } else {
+        qCritical() << "Failed to open H264 file for writing.";
+	}
+    h264File->write(reinterpret_cast<const char*>(videoEncoder_->getCodecContext()->extradata), videoEncoder_->getCodecContext()->extradata_size);
+
+	aacFile = new QFile(qApp->applicationDirPath() + "/" + "aac_data.aac");
+    if (aacFile->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qInfo() << "AAC file opened for writing.";
+    } else {
+		qCritical() << "Failed to open AAC file for writing.";
+	}
+	aacFile->write(reinterpret_cast<const char*>(audioEncoder_->getCodecContext()->extradata), audioEncoder_->getCodecContext()->extradata_size);
+
     isRecording_ = true;
     qInfo() << "Recording started.";
 }
@@ -201,6 +218,9 @@ void CAVRecorder::stopRecording()
 
     // ------------------------- 关闭muxer -------------------------
     muxer_->close();
+
+    aacFile->close();
+	h264File->close();
     cleanup(); // 清理所有资源
     qInfo() << "Recording stopped.";
 }
@@ -215,6 +235,7 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
     QVector<AVPacket*> videoPackets = videoEncoder_->encode(rgbData);
     for (AVPacket* pkt : videoPackets) 
     {
+        h264File->write(reinterpret_cast<const char*>(pkt->data), pkt->size);
         muxer_->writePacket(pkt);
         //av_packet_unref(pkt);
         av_packet_free(&pkt);
@@ -245,6 +266,7 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
                 << "size:" << pkt->size
                 << "pts:" << pkt->pts
                 << "dts:" << pkt->dts;*/
+			aacFile->write(reinterpret_cast<const char*>(pkt->data), pkt->size);
             muxer_->writePacket(pkt);
             av_packet_unref(pkt);
             av_packet_free(&pkt);

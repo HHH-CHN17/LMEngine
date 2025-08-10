@@ -37,6 +37,24 @@ public:
     bool isConnected() const;
 
     /**
+     * @brief 初始化推流器，设置 SPS/PPS 和 AudioSpecificConfig
+     *
+     * 此方法应在 connect 之后，开始发送媒体数据之前调用。
+     *
+     * @param sps 指向 H.264 SPS 数据的指针
+     * @param sps_len SPS 数据长度
+     * @param pps 指向 H.264 PPS 数据的指针
+     * @param pps_len PPS 数据长度
+     * @param asc 指向 AAC AudioSpecificConfig 数据的指针
+     * @param asc_len AudioSpecificConfig 数据长度
+     * @return true 初始化成功, false 失败
+     */
+    bool setAVConfig(
+        const uint8_t* sps, size_t sps_len,
+        const uint8_t* pps, size_t pps_len,
+        const uint8_t* asc, size_t asc_len);
+
+    /**
      * @brief 发送 H.264 视频数据
      *
      * @param data 指向 H.264 NALU 数据的指针 (通常不含起始码 0x00000001/01)。
@@ -70,13 +88,16 @@ private:
     bool sendPacket(RTMPPacket* packet, int queue = 1);
 
     /**
-     * @brief 内部辅助函数：处理并发送 SPS 和 PPS
-     * 从传入的视频数据中提取 SPS 和 PPS，并发送 AVC Sequence Header 包。
-     * @param data 包含 SPS 和 PPS 的原始数据
-     * @param len 数据长度
-     * @return true 处理并发送成功, false 失败
+     * @brief 内部辅助函数：发送 AVC Sequence Header (包含 SPS 和 PPS)
+     * @return true 发送成功, false 发送失败
      */
-    bool handleSpsPps(const uint8_t* data, size_t len);
+    bool sendVideoHeader();
+
+    /**
+     * @brief 内部辅助函数：发送 AAC Sequence Header (包含 AudioSpecificConfig)
+     * @return true 发送成功, false 发送失败
+     */
+    bool sendAudioHeader();
 
     /**
      * @brief 内部辅助函数：创建 H.264 视频 RTMPPacket
@@ -100,10 +121,12 @@ private:
 
 private:
     std::unique_ptr<RTMP, decltype(&RTMP_Free)> rtmpPtr_; // 使用智能指针管理 RTMP 对象
-    bool isConnected_;
-    std::vector<uint8_t> sps_; // 缓存 SPS
-    std::vector<uint8_t> pps_; // 缓存 PPS
-    bool sps_pps_sent_;        // 标记是否已发送 SPS/PPS
+    bool isConnected_ = false;
+    std::vector<uint8_t> sps_{}; // 缓存 SPS
+    std::vector<uint8_t> pps_{}; // 缓存 PPS
+    std::vector<uint8_t> asc_{}; // 缓存 AAC AudioSpecificConfig
+    bool sps_pps_sent_ = false;     // 标记是否已发送 SPS/PPS
+    bool asc_sent_ = false;         // 标记是否已发送 AudioSpecificConfig
 };
 
 #endif // RTMP_PUSH_H

@@ -1,18 +1,22 @@
 #include "RtmpPush.h"
 #include <cstring> // For memcpy, memset
-#include <iostream> // For optional logging, can be replaced with your logger
+#include <iostream> // For logging, can be replaced with qDebug etc.
+#include <algorithm> // For std::max
 #include <QDebug>
 
-// --- 辅助宏 ---
+// --- 定义 RTMP 通道和包大小 ---
 #define RTMP_CHANNEL_VIDEO 0x04
 #define RTMP_CHANNEL_AUDIO 0x05
-//#define RTMP_PACKET_SIZE_MEDIUM RTMP_PACKET_SIZE_MEDIUM
-//#define RTMP_PACKET_SIZE_LARGE RTMP_PACKET_SIZE_LARGE
+// #define RTMP_PACKET_SIZE_MEDIUM RTMP_PACKET_SIZE_MEDIUM
+// #define RTMP_PACKET_SIZE_LARGE RTMP_PACKET_SIZE_LARGE
 
-CRtmpPush::CRtmpPush(int log_level) : rtmpPtr_(nullptr, &RTMP_Free), isConnected_(false), sps_pps_sent_(false) {
+CRtmpPush::CRtmpPush(int log_level)
+    : rtmpPtr_(nullptr, &RTMP_Free), isConnected_(false),
+    sps_pps_sent_(false), asc_sent_(false) {
     // 初始化 librtmp 日志级别
     RTMP_LogSetLevel(static_cast<RTMP_LogLevel>(log_level));
     // RTMP_LogSetOutput(stdout); // 可选：设置 librtmp 日志输出到 stdout
+    // 或者使用自定义回调，如之前的讨论
 }
 
 CRtmpPush::~CRtmpPush() {
@@ -21,14 +25,14 @@ CRtmpPush::~CRtmpPush() {
 
 bool CRtmpPush::connect(const char* rtmp_url) {
     if (isConnected_) {
-        qCritical() << "Already connected.";
-        return true; // 或者返回 false，取决于策略
+        // std::cerr << "Already connected." << std::endl;
+        return true;
     }
 
     // 分配 RTMP 对象
     RTMP* rtmp_raw = RTMP_Alloc();
     if (!rtmp_raw) {
-        qCritical() << "Failed to allocate RTMP object.";
+        // std::cerr << "Failed to allocate RTMP object." << std::endl;
         return false;
     }
 
@@ -38,10 +42,11 @@ bool CRtmpPush::connect(const char* rtmp_url) {
     // 初始化 RTMP 对象
     RTMP_Init(rtmp_raw);
     rtmp_raw->Link.timeout = 10; // 设置超时时间
+    rtmp_raw->Link.lFlags |= RTMP_LF_LIVE; // 设置为直播模式
 
     // 设置推流 URL
     if (!RTMP_SetupURL(rtmp_raw, const_cast<char*>(rtmp_url))) {
-        qCritical() << "Failed to setup RTMP URL: " << rtmp_url;
+        // std::cerr << "Failed to setup RTMP URL: " << rtmp_url << std::endl;
         rtmpPtr_.reset(); // 重置指针，触发 RTMP_Free
         return false;
     }
@@ -51,24 +56,24 @@ bool CRtmpPush::connect(const char* rtmp_url) {
 
     // 建立连接
     if (!RTMP_Connect(rtmp_raw, nullptr)) {
-        qCritical() << "Failed to connect to RTMP server.";
+        // std::cerr << "Failed to connect to RTMP server." << std::endl;
         rtmpPtr_.reset();
         return false;
     }
 
     // 创建流
     if (!RTMP_ConnectStream(rtmp_raw, 0)) {
-        qCritical() << "Failed to connect to RTMP stream.";
+        // std::cerr << "Failed to connect to RTMP stream." << std::endl;
         RTMP_Close(rtmp_raw); // 关闭连接
         rtmpPtr_.reset();
         return false;
     }
 
     isConnected_ = true;
-    sps_pps_sent_ = false; // 重置 SPS/PPS 发送状态
-    sps_.clear();
-    pps_.clear();
-    qDebug() << "Connected to RTMP server: " << rtmp_url;
+    // 重置发送状态，等待 initialize 调用
+    sps_pps_sent_ = false;
+    asc_sent_ = false;
+    // std::cout << "Connected to RTMP server: " << rtmp_url << std::endl;
     return true;
 }
 
@@ -76,93 +81,103 @@ void CRtmpPush::disconnect() {
     if (rtmpPtr_ && isConnected_) {
         RTMP_Close(rtmpPtr_.get());
         // rtmpPtr_.reset() 会在作用域结束或显式调用时调用 RTMP_Free
-        qDebug() << "Disconnected from RTMP server.";
+        // std::cout << "Disconnected from RTMP server." << std::endl;
     }
     isConnected_ = false;
     sps_pps_sent_ = false;
+    asc_sent_ = false;
+    // 清空缓存
     sps_.clear();
     pps_.clear();
+    asc_.clear();
 }
 
 bool CRtmpPush::isConnected() const {
     return isConnected_ && rtmpPtr_ && RTMP_IsConnected(rtmpPtr_.get());
 }
 
+bool CRtmpPush::setAVConfig(const uint8_t* sps, size_t sps_len,
+    const uint8_t* pps, size_t pps_len,
+    const uint8_t* asc, size_t asc_len) {
+    if (!isConnected()) {
+        return false;
+    }
+
+    bool success = true;
+    if (sps && sps_len > 0) {
+        sps_.assign(sps, sps + sps_len);
+    }
+    else {
+        success = false;
+        qCritical() << "Invalid SPS provided to initialize.";
+    }
+
+    if (pps && pps_len > 0) {
+        pps_.assign(pps, pps + pps_len);
+    }
+    else {
+        success = false;
+        qCritical() << "Invalid PPS provided to initialize.";
+    }
+
+    if (asc && asc_len > 0) {
+        asc_.assign(asc, asc + asc_len);
+    }
+    else {
+        success = false;
+        qCritical() << "Invalid ASC provided to initialize.";
+    }
+
+    // 初始化后不立即发送，等第一个 IDR 帧或音频帧时再发送
+    sps_pps_sent_ = false;
+    asc_sent_ = false;
+
+    return success;
+}
+
+
 bool CRtmpPush::sendVideo(const uint8_t* data, size_t len, uint32_t dts, bool is_keyframe) {
     if (!isConnected() || !data || len == 0) {
         return false;
     }
 
-    // 简单判断是否为 SPS/PPS (假设在一个包里，且以 SPS 开头)
-    // 更健壮的做法是检查 NALU 类型 (data[0] & 0x1F)
-    if (len >= 4 && data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 && data[3] == 0x01) {
-        // 查找第二个起始码来分离 SPS 和 PPS
-        const uint8_t* sps_start = data;
-        size_t sps_len = 0;
-        const uint8_t* pps_start = nullptr;
-        size_t pps_len = 0;
-
-        // 查找第二个 0x00000001
-        for (size_t i = 4; i < len - 3; ++i) {
-            if (data[i] == 0x00 && data[i + 1] == 0x00 && data[i + 2] == 0x00 && data[i + 3] == 0x01) {
-                sps_len = i; // SPS 长度到第二个起始码为止
-                pps_start = data + i + 4; // PPS 从第二个起始码之后开始
-                pps_len = len - (i + 4);
-                break;
-            }
-        }
-
-        // 如果找到了 PPS
-        if (pps_start && sps_len > 4 && pps_len > 0) {
-            // 去掉起始码
-            sps_.assign(sps_start + 4, sps_start + sps_len);
-            pps_.assign(pps_start + 4, pps_start + pps_len);
-            // qDebug() << "SPS and PPS extracted and cached.";
-            // 这里可以选择立即发送 SPS/PPS，或者等第一个 IDR 帧再发
-            // 为了简化，我们在这里处理，但实际应用中可能在收到 IDR 时发送
-            // handleSpsPps(data, len); // 也可以调用这个函数处理
-            return true; // SPS/PPS 缓存成功
-        }
-    }
-
     // 如果是关键帧且 SPS/PPS 还没发送，则先发送
     if (is_keyframe && !sps_pps_sent_ && !sps_.empty() && !pps_.empty()) {
-        // 创建并发送 AVC Sequence Header (包含 SPS 和 PPS)
-        RTMPPacket* sps_pps_packet = createVideoPacket(nullptr, 0, 0, true); // 特殊调用，data=nullptr 表示发送 SPS/PPS
-        if (sps_pps_packet) {
-            bool res = sendPacket(sps_pps_packet);
-            if (res) {
-                sps_pps_sent_ = true;
-                // qDebug() << "SPS/PPS packet sent.";
-            }
-            // sendPacket 内部会调用 RTMPPacket_Free
-            // free(sps_pps_packet); // 不需要，因为 sendPacket 已经处理
-            if (!res) return false;
+        if (!sendVideoHeader()) {
+            return false;
         }
+        sps_pps_sent_ = true;
     }
 
     // 创建并发送普通视频帧数据包
     RTMPPacket* video_packet = createVideoPacket(data, len, dts, is_keyframe);
     if (video_packet) {
         bool res = sendPacket(video_packet);
-        // sendPacket 内部会调用 RTMPPacket_Free
-        // free(video_packet); // 不需要
+        // sendPacket 内部会调用 RTMPPacket_Free 和 free(packet)
         return res;
     }
     return false;
 }
-
 
 bool CRtmpPush::sendAudio(const uint8_t* data, size_t len, uint32_t dts, bool is_sequence_header) {
     if (!isConnected() || !data || len == 0) {
         return false;
     }
 
+    // 如果是 Sequence Header 且还没发送，则先发送
+    if (is_sequence_header && !asc_sent_ && !asc_.empty()) {
+        if (!sendAudioHeader()) {
+            return false;
+        }
+        asc_sent_ = true;
+        return true; // Sequence Header 发送完毕
+    }
+
+    // 发送 AAC 原始数据帧
     RTMPPacket* audio_packet = createAudioPacket(data, len, dts, is_sequence_header);
     if (audio_packet) {
         bool res = sendPacket(audio_packet);
-        // sendPacket 内部会调用 RTMPPacket_Free
-        // free(audio_packet); // 不需要
+        // sendPacket 内部会调用 RTMPPacket_Free 和 free(packet)
         return res;
     }
     return false;
@@ -181,64 +196,93 @@ bool CRtmpPush::sendPacket(RTMPPacket* packet, int queue) {
     return result == 1;
 }
 
+bool CRtmpPush::sendVideoHeader() {
+    RTMPPacket* packet = static_cast<RTMPPacket*>(malloc(sizeof(RTMPPacket)));
+    if (!packet) return false;
+    RTMPPacket_Reset(packet);
 
-bool CRtmpPush::handleSpsPps(const uint8_t* data, size_t len) {
-    // 此函数的逻辑已在 sendVideo 中实现
-    // 这里保留是为了接口完整性，如果需要独立处理可以在此实现
-    // ...
-    return true;
+    // 计算包体大小
+    size_t body_size = 11 + sps_.size() + 1 + 2 + pps_.size() + 2;
+    RTMPPacket_Alloc(packet, body_size);
+
+    uint8_t* body = reinterpret_cast<uint8_t*>(packet->m_body);
+    int i = 0;
+    body[i++] = 0x17; // FrameType (1=KeyFrame) + CodecID (7=AVC)
+    body[i++] = 0x00; // AVCPacketType = 0 (Sequence Header)
+    body[i++] = 0x00; body[i++] = 0x00; body[i++] = 0x00; // CompositionTime = 0
+
+    // AVCDecoderConfigurationRecord
+    body[i++] = 0x01; // configurationVersion
+    body[i++] = sps_[1]; // AVCProfileIndication
+    body[i++] = sps_[2]; // profile_compatibility
+    body[i++] = sps_[3]; // AVCLevelIndication
+    body[i++] = 0xFF; // lengthSizeMinusOne (通常为 3 bytes for length)
+
+    // SPS
+    body[i++] = 0xE1; // numOfSequenceParameterSets (1)
+    body[i++] = (sps_.size() >> 8) & 0xFF; // sequenceParameterSetLength high
+    body[i++] = sps_.size() & 0xFF;        // sequenceParameterSetLength low
+    memcpy(body + i, sps_.data(), sps_.size());
+    i += sps_.size();
+
+    // PPS
+    body[i++] = 0x01; // numOfPictureParameterSets
+    body[i++] = (pps_.size() >> 8) & 0xFF; // pictureParameterSetLength high
+    body[i++] = pps_.size() & 0xFF;        // pictureParameterSetLength low
+    memcpy(body + i, pps_.data(), pps_.size());
+    i += pps_.size();
+
+    packet->m_packetType = RTMP_PACKET_TYPE_VIDEO;
+    packet->m_nBodySize = i; // 实际写入的大小
+    packet->m_nChannel = RTMP_CHANNEL_VIDEO;
+    packet->m_nTimeStamp = 0; // SPS/PPS 时间戳通常为 0
+    packet->m_hasAbsTimestamp = 0;
+    packet->m_headerType = RTMP_PACKET_SIZE_MEDIUM;
+    packet->m_nInfoField2 = rtmpPtr_->m_stream_id;
+
+    bool res = sendPacket(packet); // sendPacket 会处理内存释放
+    // 注意：packet 指针在此之后已失效
+    return res;
 }
+
+
+bool CRtmpPush::sendAudioHeader() {
+    RTMPPacket* packet = static_cast<RTMPPacket*>(malloc(sizeof(RTMPPacket)));
+    if (!packet) return false;
+    RTMPPacket_Reset(packet);
+
+    size_t body_size = 2 + asc_.size(); // 2 bytes header + ASC
+    RTMPPacket_Alloc(packet, body_size);
+
+    uint8_t* body = reinterpret_cast<uint8_t*>(packet->m_body);
+    int i = 0;
+    body[i++] = 0xAF; // SoundFormat (10=AAC) + SoundRate + SoundSize + SoundType
+    body[i++] = 0x00; // AACPacketType: 0=Sequence Header
+
+    if (!asc_.empty()) {
+        memcpy(body + i, asc_.data(), asc_.size());
+        i += asc_.size();
+    }
+
+    packet->m_packetType = RTMP_PACKET_TYPE_AUDIO;
+    packet->m_nBodySize = i;
+    packet->m_nChannel = RTMP_CHANNEL_AUDIO;
+    packet->m_nTimeStamp = 0; // ASC 时间戳通常为 0
+    packet->m_hasAbsTimestamp = 0;
+    packet->m_headerType = RTMP_PACKET_SIZE_LARGE;
+    packet->m_nInfoField2 = rtmpPtr_->m_stream_id;
+
+    bool res = sendPacket(packet); // sendPacket 会处理内存释放
+    // 注意：packet 指针在此之后已失效
+    return res;
+}
+
 
 RTMPPacket* CRtmpPush::createVideoPacket(const uint8_t* data, size_t len, uint32_t dts, bool is_keyframe) {
     RTMPPacket* packet = static_cast<RTMPPacket*>(malloc(sizeof(RTMPPacket)));
     if (!packet) return nullptr;
     RTMPPacket_Reset(packet);
 
-    // 特殊情况：发送 SPS/PPS
-    if (data == nullptr && is_keyframe && !sps_.empty() && !pps_.empty()) {
-        // 计算包体大小
-        size_t body_size = 11 + sps_.size() + 1 + 2 + pps_.size() + 2; // 11: header, sps_len, pps_len 各占字节
-        RTMPPacket_Alloc(packet, body_size);
-
-        uint8_t* body = reinterpret_cast<uint8_t*>(packet->m_body);
-        int i = 0;
-        body[i++] = 0x17; // FrameType (1=KeyFrame) + CodecID (7=AVC)
-        body[i++] = 0x00; // AVCPacketType = 0 (Sequence Header)
-        body[i++] = 0x00; body[i++] = 0x00; body[i++] = 0x00; // CompositionTime = 0
-
-        // AVCDecoderConfigurationRecord
-        body[i++] = 0x01; // configurationVersion
-        body[i++] = sps_[1]; // AVCProfileIndication
-        body[i++] = sps_[2]; // profile_compatibility
-        body[i++] = sps_[3]; // AVCLevelIndication
-        body[i++] = 0xFF; // lengthSizeMinusOne (3 bytes for length)
-
-        // SPS
-        body[i++] = 0xE1; // numOfSequenceParameterSets (high 3 bits reserved, low 5 bits = 1)
-        body[i++] = (sps_.size() >> 8) & 0xFF; // sequenceParameterSetLength high
-        body[i++] = sps_.size() & 0xFF;        // sequenceParameterSetLength low
-        memcpy(body + i, sps_.data(), sps_.size());
-        i += sps_.size();
-
-        // PPS
-        body[i++] = 0x01; // numOfPictureParameterSets
-        body[i++] = (pps_.size() >> 8) & 0xFF; // pictureParameterSetLength high
-        body[i++] = pps_.size() & 0xFF;        // pictureParameterSetLength low
-        memcpy(body + i, pps_.data(), pps_.size());
-        i += pps_.size();
-
-        packet->m_packetType = RTMP_PACKET_TYPE_VIDEO;
-        packet->m_nBodySize = i; // 实际写入的大小
-        packet->m_nChannel = RTMP_CHANNEL_VIDEO;
-        packet->m_nTimeStamp = dts; // SPS/PPS 通常时间戳为 0，但这里传入
-        packet->m_hasAbsTimestamp = 0;
-        packet->m_headerType = RTMP_PACKET_SIZE_MEDIUM; // 或 LARGE
-        packet->m_nInfoField2 = rtmpPtr_->m_stream_id;
-
-        return packet;
-    }
-
-    // 普通视频帧
     size_t body_size = 9 + len; // 9 bytes for FLV VideoTagHeader + NALU length header
     RTMPPacket_Alloc(packet, body_size);
 
@@ -270,26 +314,33 @@ RTMPPacket* CRtmpPush::createVideoPacket(const uint8_t* data, size_t len, uint32
     return packet;
 }
 
-
 RTMPPacket* CRtmpPush::createAudioPacket(const uint8_t* data, size_t len, uint32_t dts, bool is_sequence_header) {
+    // 此函数现在应该只处理 Raw AAC Data，因为 Sequence Header 由 sendAudioHeader 处理
+    // 但为了接口一致性，仍然保留 is_sequence_header 参数（虽然内部不使用它来创建包）
+    if (is_sequence_header) {
+        // 这种情况应该在 sendAudio 中被 sendAudioHeader 处理
+        // 这里返回 nullptr 表示不创建包
+        return nullptr;
+    }
+
     RTMPPacket* packet = static_cast<RTMPPacket*>(malloc(sizeof(RTMPPacket)));
     if (!packet) return nullptr;
     RTMPPacket_Reset(packet);
 
-    size_t body_size = (is_sequence_header ? 2 : 1) + len; // 2 bytes header for sequence, 1 for raw data
+    size_t body_size = 2 + len; // 2 bytes header (0xAF, 0x01) + Raw AAC data
     RTMPPacket_Alloc(packet, body_size);
 
     uint8_t* body = reinterpret_cast<uint8_t*>(packet->m_body);
     int i = 0;
-    body[i++] = 0xAF; // SoundFormat (10=AAC) + SoundRate (3=44kHz) + SoundSize (1=16-bit) + SoundType (1=Stereo)
-    body[i++] = is_sequence_header ? 0x00 : 0x01; // AACPacketType: 0=Sequence Header, 1=Raw Data
+    body[i++] = 0xAF; // SoundFormat (10=AAC) + SoundRate + SoundSize + SoundType
+    body[i++] = 0x01; // AACPacketType: 1=Raw Data
 
     if (len > 0) {
         memcpy(body + i, data, len);
     }
 
     packet->m_packetType = RTMP_PACKET_TYPE_AUDIO;
-    packet->m_nBodySize = body_size;
+    packet->m_nBodySize = body_size; // i + len
     packet->m_nChannel = RTMP_CHANNEL_AUDIO;
     packet->m_nTimeStamp = dts;
     packet->m_hasAbsTimestamp = 0;
