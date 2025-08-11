@@ -45,7 +45,7 @@ public:
     bool isRecording() const;
 
     /**
-	 * @brief 获取视频编码器的sps和pps
+	 * @brief 解析Annex B，获取视频编码器的sps和pps
 	 *          在设置AV_CODEC_FLAG_GLOBAL_HEADER之后，该参数存储于codecCtx->extradata中
      * @param sps 序列参数集
      * @param pps 图像参数集

@@ -57,8 +57,7 @@ public:
     /**
      * @brief 发送 H.264 视频数据
      *
-     * @param data 指向 H.264 NALU 数据的指针 (通常不含起始码 0x00000001/01)。
-     *             对于 SPS/PPS，需要是包含 SPS 和 PPS 的完整单元。
+     * @param data 指向 H.264 NALU 数据的指针 (不含起始码)。
      * @param len 数据长度
      * @param dts 解码时间戳 (毫秒)
      * @param is_keyframe 是否为关键帧 (IDR)
@@ -70,7 +69,6 @@ public:
      * @brief 发送 AAC 音频数据
      *
      * @param data 指向 AAC 原始数据帧的指针 (不含 ADTS 头)。
-     *             对于 AAC Sequence Header (AudioSpecificConfig)，需要特殊处理。
      * @param len 数据长度
      * @param dts 解码时间戳 (毫秒)
      * @param is_sequence_header 是否为 AAC Sequence Header

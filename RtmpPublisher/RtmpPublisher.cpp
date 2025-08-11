@@ -1,6 +1,7 @@
 #include "RtmpPublisher.h"
 #include <QDebug>
 #include <qguiapplication.h>
+#include <algorithm>
 
 #ifdef DEBUG
 static void ffmpeg_log_callback(void* ptr, int level, const char* fmt, va_list vargs)
@@ -46,6 +47,32 @@ static void ffmpeg_log_callback(void* ptr, int level, const char* fmt, va_list v
     }
 }
 #endif // DEBUG 
+
+namespace
+{
+    std::vector<uint8_t>::const_iterator
+        find_h264_start_code(
+            std::vector<uint8_t>::const_iterator& begin,
+            std::vector<uint8_t>::const_iterator& end)
+    {
+
+        const uint8_t startCode3[] = { 0x00, 0x00, 0x01 };
+        const uint8_t startCode4[] = { 0x00, 0x00, 0x00, 0x01 };
+
+        auto it = std::search(begin, end, std::begin(startCode4), std::end(startCode4));
+        if (it != end) {
+            return it; // 返回起始码的开始位置
+        }
+
+        it = std::search(begin, end, std::begin(startCode3), std::end(startCode3));
+        if (it != end) {
+            return it; // 返回起始码的开始位置
+        }
+
+        return end;
+    }
+
+}
 
 static void avCheckRet(const char* operate, int ret)
 {
@@ -199,7 +226,20 @@ bool CRtmpPublisher::pushing(const unsigned char* rgbData)
     {
         // 该流程为同步流程，随后改为异步流程时需要深拷贝
         bool isKeyFrame = (pkt->flags & AV_PKT_FLAG_KEY) != 0;
-        rtmpPush_->sendVideo(pkt->data, pkt->size, pkt->dts, isKeyFrame);
+        // 移除startCode
+        uint8_t* data = pkt->data;
+        assert(pkt->size >= 4);
+        int startCodeLen = 0;
+        if ((data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x01))
+        {
+            startCodeLen = 3;
+        }
+        else if ((data[0] == 0x00 && data[1] == 0x00 && data[2] == 0x00 && data[3] == 0x01))
+        {
+            startCodeLen = 4;
+        }
+
+        rtmpPush_->sendVideo(pkt->data + startCodeLen, pkt->size - startCodeLen, pkt->dts, isKeyFrame);
         av_packet_unref(pkt);
         av_packet_free(&pkt);
     }
@@ -292,103 +332,83 @@ void CRtmpPublisher::cleanup()
 
 bool CRtmpPublisher::getH264Config(std::vector<uint8_t>& sps, std::vector<uint8_t>& pps)
 {
-	const AVCodecContext* codecCtx = videoEncoder_->getCodecContext();
+    const AVCodecContext* codecCtx = videoEncoder_->getCodecContext();
 
-	if (!codecCtx || !codecCtx->extradata || codecCtx->extradata_size <= 0 ||
-		!(codecCtx->flags & AV_CODEC_FLAG_GLOBAL_HEADER) ||
-		codecCtx->codec_id != AV_CODEC_ID_H264) 
+    // 1. 验证输入上下文和 extradata 的有效性
+    if (!codecCtx || !codecCtx->extradata || codecCtx->extradata_size <= 0 ||
+        !(codecCtx->flags & AV_CODEC_FLAG_GLOBAL_HEADER) ||
+        codecCtx->codec_id != AV_CODEC_ID_H264)
     {
-			return false;
-
-    }
-	 const uint8_t* extradata = codecCtx->extradata;
-	 int extradata_size = codecCtx->extradata_size;
-
-    if (extradata_size < 8) { // 至少需要 AVCDecoderConfigurationRecord 的基本头部
-        qCritical() << "Extradata too small.";
+        qWarning() << "getH264Config: Invalid video encoder context or extradata is not available/valid.";
         return false;
     }
-
-    // 检查是否是 AVCDecoderConfigurationRecord 格式 (通常第一个字节是版本号 1)
-    if (extradata[0] != 1) {
-        qCritical() << "Extradata is not in AVCDecoderConfigurationRecord format.";
-        return false;
-    }
-
-    // 解析 AVCDecoderConfigurationRecord
-    // 布局参考 ISO/IEC 14496-15
-    // offset 0: configurationVersion (1 byte)
-    // offset 1: AVCProfileIndication (1 byte)
-    // offset 2: profile_compatibility (1 byte)
-    // offset 3: AVCLevelIndication (1 byte)
-    // offset 4: lengthSizeMinusOne (2 bits) + reserved (6 bits)
-    // offset 5: numOfSequenceParameterSets (5 bits) + reserved (3 bits)
-    int offset = 5;
-    uint8_t num_sps = extradata[offset] & 0x1F;
-    offset++;
 
     sps.clear();
     pps.clear();
 
-    // 提取 SPS
-    for (int i = 0; i < num_sps; ++i) 
-    {
-        if (offset + 2 > extradata_size) 
+    // 将 extradata 拷贝到 vector 中，便于使用迭代器进行搜索
+    const std::vector<uint8_t> vecExtraData(codecCtx->extradata, codecCtx->extradata + codecCtx->extradata_size);
+    auto itExDataCurr = vecExtraData.cbegin();
+    auto itExDataEnd = vecExtraData.cend();
+
+    // 2. 循环遍历 extradata，查找并分离出所有的 NAL 单元
+    while (true) {
+        // 查找当前位置的 NAL 单元起始码
+        auto itNalBegin = find_h264_start_code(itExDataCurr, itExDataEnd);
+        if (itNalBegin == itExDataEnd)
+            break;
+        
+        size_t start_code_len = (itNalBegin + 3 < itExDataEnd && itNalBegin[3] == 0x01) ? 4 : 3;
+        auto itDataBegin = itNalBegin + start_code_len;
+        auto itNalEnd = find_h264_start_code(itDataBegin, itExDataEnd); // 当前 NAL 单元的结束位置即下一个NAL单元起始码的位置或者是itExDataEnd
+
+        // 提取当前 NAL 单元的数据
+        std::vector<uint8_t> vecNalData(itDataBegin, itNalEnd);
+
+        if (!vecNalData.empty()) 
         {
-            qCritical() << "Invalid SPS length in extradata.";
-            return false;
+            // 获取 NAL 单元类型 (NAL Header 的低 5 位)
+            uint8_t nalType = vecNalData[0] & 0x1F;
+
+            // 3. 根据 NAL 单元类型进行分配
+            switch (nalType) {
+            case 0x07: // SPS
+                if (sps.empty()) // 只保存第一个找到的 SPS
+                    sps = vecNalData;
+                else
+                    qWarning() << "getH264Config: Found multiple SPS NAL units, using the first one.";
+                break;
+            case 0x08: // PPS
+                if (pps.empty()) // 只保存第一个找到的 PPS
+                    pps = vecNalData;
+                else
+                    qWarning() << "getH264Config: Found multiple PPS NAL units, using the first one.";
+                break;
+            case 0x06: // SEI
+                qDebug() << "getH264Config: Found and skipped SEI NAL unit.";
+                break;
+            default:
+                qDebug() << "getH264Config: Found and skipped NAL unit of type" << nalType;
+                break;
+            }
         }
-        uint16_t sps_len = (extradata[offset] << 8) | extradata[offset + 1];
-        offset += 2;
-        if (offset + sps_len > extradata_size) 
-        {
-            qCritical() << "SPS data exceeds extradata size.";
-            return false;
-        }
-        // 通常只处理第一个 SPS
-        if (sps.empty() && sps_len > 0) 
-        {
-            sps.assign(extradata + offset, extradata + offset + sps_len);
-            // std::cout << "Extracted SPS, length: " << sps_len;
-        }
-        offset += sps_len;
+
+        // 如果已经同时找到了 SPS 和 PPS，就可以提前结束搜索
+        if (!sps.empty() && !pps.empty())
+            break;
+
+        // 从下一个 NAL 单元的起始位置继续搜索
+        itExDataCurr = itNalEnd;
     }
 
-    // 提取 PPS
-    if (offset + 1 > extradata_size) 
-    {
-        qCritical() << "Invalid PPS count in extradata.";
+    // 4. 最终检查是否成功提取
+    if (sps.empty() || pps.empty()) {
+        qCritical() << "getH264Config: Failed to find both SPS and PPS in extradata.";
         return false;
     }
-    uint8_t num_pps = extradata[offset];
-    offset++;
 
-    for (int i = 0; i < num_pps; ++i) 
-    {
-        if (offset + 2 > extradata_size) 
-        {
-            qCritical() << "Invalid PPS length in extradata.";
-            return false;
-        }
-        uint16_t pps_len = (extradata[offset] << 8) | extradata[offset + 1];
-        offset += 2;
-        if (offset + pps_len > extradata_size) 
-        {
-            qCritical() << "PPS data exceeds extradata size.";
-            return false;
-        }
-        // 通常只处理第一个 PPS
-        if (pps.empty() && pps_len > 0)
-        {
-            pps.assign(extradata + offset, extradata + offset + pps_len);
-            // std::cout << "Extracted PPS, length: " << pps_len;
-        }
-        offset += pps_len;
-    }
-
-	qDebug() << "Extracted SPS size:" << sps.size() << ", PPS size:" << pps.size();
-
-    return !sps.empty() && !pps.empty();
+    qDebug() << "Successfully extracted SPS (size:" << sps.size() << ") and PPS (size:" << pps.size() << ")";
+    return true;
 }
 
 bool CRtmpPublisher::getAacConfig(std::vector<uint8_t>& asc) {

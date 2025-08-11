@@ -18,7 +18,8 @@ public:
     ~MainWidget();
 
 private slots:
-    void slot_RecordButtonClicked();
+    void slot_RecordBtnClicked();
+    void slot_RtmpPushBtnClicked();
 
 private:
     Ui::MainWidget *ui;
