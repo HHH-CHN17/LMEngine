@@ -69,7 +69,6 @@ CAudioEncoder::~CAudioEncoder()
     cleanup();
 }
 
-//bool CAudioEncoder::initialize(int sampleRate, int channels, long long bitrate)
 bool CAudioEncoder::initialize(const AudioCodecCfg& dstFmt, const AudioFormat& srcFmt)
 {
     cleanup();
@@ -160,6 +159,16 @@ bool CAudioEncoder::initialize(const AudioCodecCfg& dstFmt, const AudioFormat& s
     ptsCnt_ = 0;
     qInfo() << "Audio Encoder initialized successfully. Frame size:" << codecCtx_->frame_size;
     return true;
+}
+
+void CAudioEncoder::resetTimestamp()
+{
+	ptsCnt_ = 0;
+    if (resampleFrame_) 
+    {
+        resampleFrame_->pts = 0; // 重置重采样帧的PTS
+    }
+	qInfo() << "Audio Encoder: Timestamp reset.";
 }
 
 QVector<AVPacket*> CAudioEncoder::encode(const unsigned char* pcmData)

@@ -38,11 +38,11 @@ void MainWidget::slot_RtmpPushBtnClicked()
     static bool record = false;
     record = !record;
     if (record) {
-        ui->btn_record->setIcon(QIcon(":/images/Resource/images/RecordButton_Stop_bg.png"));
+        ui->btn_rtmpPush->setIcon(QIcon(":/images/Resource/images/RecordButton_Stop_bg.png"));
         ui->openGLWidget->startRecord(avACT::RTMPPUSH);
     }
     else {
-        ui->btn_record->setIcon(QIcon(":/images/Resource/images/RecordButton_Start_bg.png"));
+        ui->btn_rtmpPush->setIcon(QIcon(":/images/Resource/images/RecordButton_Start_bg.png"));
         ui->openGLWidget->stopRecord(avACT::RTMPPUSH);
     }
 }

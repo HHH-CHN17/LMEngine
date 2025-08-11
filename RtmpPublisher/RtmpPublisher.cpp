@@ -2,6 +2,7 @@
 #include <QDebug>
 #include <qguiapplication.h>
 #include <algorithm>
+#include <QDateTime>
 
 #ifdef DEBUG
 static void ffmpeg_log_callback(void* ptr, int level, const char* fmt, va_list vargs)
@@ -91,7 +92,7 @@ CRtmpPublisher::CRtmpPublisher(QObject* parent)
 
 CRtmpPublisher::~CRtmpPublisher()
 {
-    if (isRecording_)
+    if (isPushing_)
     {
         stopPush();
     }
@@ -119,7 +120,7 @@ QAudioFormat CRtmpPublisher::initAudioFormat(const AudioFormat& fmt)
 
 bool CRtmpPublisher::initialize(AVConfig& config)
 {
-    if (isRecording_)
+    if (isPushing_)
     {
         qWarning() << "Controller is busy. Please stop pushing first.";
         return false;
@@ -178,14 +179,51 @@ bool CRtmpPublisher::initialize(AVConfig& config)
     }
 
     qInfo() << "RtmpPublisher initialized successfully.";
+
     return true;
 }
 
 void CRtmpPublisher::startPush()
 {
-    if (isRecording_) return;
+    if (isPushing_) return;
 
-    audioCapturer_->start(); // 开始录音，填充音频缓冲区
+	// ------------------------- 写入h.264文件头，数据 -------------------------
+    /*QFile h264head = QFile(qApp->applicationDirPath() + "/" + "h264_head.h264");
+    if (h264head.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qInfo() << "H264 file opened for writing.";
+    }
+    else {
+        qCritical() << "Failed to open H264 file for writing.";
+    }
+    h264head.write(reinterpret_cast<const char*>(videoEncoder_->getCodecContext()->extradata), videoEncoder_->getCodecContext()->extradata_size);
+	h264head.close();
+
+    h264File = new QFile(qApp->applicationDirPath() + "/" + "h264_data.h264");
+    if (h264File->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qInfo() << "H264 file opened for writing.";
+    }
+    else {
+        qCritical() << "Failed to open H264 file for writing.";
+    }
+
+	// ------------------------- 写入aac文件头，数据 -------------------------
+    QFile aacHead = QFile(qApp->applicationDirPath() + "/" + "aac_head.aac");
+    if (aacHead.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qInfo() << "H264 file opened for writing.";
+    }
+    else {
+        qCritical() << "Failed to open H264 file for writing.";
+    }
+    aacHead.write(reinterpret_cast<const char*>(audioEncoder_->getCodecContext()->extradata), audioEncoder_->getCodecContext()->extradata_size);
+	aacHead.close();
+
+    aacFile = new QFile(qApp->applicationDirPath() + "/" + "aac_data.aac");
+    if (aacFile->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qInfo() << "AAC file opened for writing.";
+    }
+    else {
+        qCritical() << "Failed to open AAC file for writing.";
+    }*/
 
     // ------------------------- 发送流媒体数据之前，需要发送H.264和AAC的配置信息 -------------------------
 
@@ -210,13 +248,18 @@ void CRtmpPublisher::startPush()
         asc.data(), asc.size()
     );
 
-    isRecording_ = true;
+    // ------------------------- 重置时间戳 -------------------------
+    audioEncoder_->resetTimestamp();
+	videoEncoder_->resetTimestamp();
+    audioCapturer_->start(); // 开始录音，填充音频缓冲区
+
+    isPushing_ = true;
     qInfo() << "Recording started.";
 }
 
 bool CRtmpPublisher::pushing(const unsigned char* rgbData)
 {
-    if (!isRecording_) return false;
+    if (!isPushing_) return false;
     if (!rgbData) return false;
 
     // ------------------------- 视频编码 -------------------------
@@ -239,6 +282,17 @@ bool CRtmpPublisher::pushing(const unsigned char* rgbData)
             startCodeLen = 4;
         }
 
+        uint8_t nalType = data[startCodeLen] & 0x1F;
+        if (0x06 == (nalType & 0x1F))
+        {
+	        qDebug() << "SEI NAL unit detected, skipping.";
+            // SEI NAL unit不需要发送
+            av_packet_unref(pkt);
+            av_packet_free(&pkt);
+			continue;
+        }
+
+        //h264File->write(reinterpret_cast<const char*>(pkt->data), pkt->size);
         rtmpPush_->sendVideo(pkt->data + startCodeLen, pkt->size - startCodeLen, pkt->dts, isKeyFrame);
         av_packet_unref(pkt);
         av_packet_free(&pkt);
@@ -270,7 +324,8 @@ bool CRtmpPublisher::pushing(const unsigned char* rgbData)
                 << "pts:" << pkt->pts
                 << "dts:" << pkt->dts;*/
         	// 该流程为同步流程，随后改为异步流程时需要深拷贝
-            rtmpPush_->sendAudio(pkt->data, pkt->size, pkt->dts, false);
+            //aacFile->write(reinterpret_cast<const char*>(pkt->data), pkt->size);
+            rtmpPush_->sendAudio(pkt->data, pkt->size, pkt->dts);
             av_packet_unref(pkt);
             av_packet_free(&pkt);
         }
@@ -281,9 +336,9 @@ bool CRtmpPublisher::pushing(const unsigned char* rgbData)
 
 void CRtmpPublisher::stopPush()
 {
-    if (!isRecording_) return;
+    if (!isPushing_) return;
 
-    isRecording_ = false;
+    isPushing_ = false;
     qInfo() << "Stopping pushing...";
 
     audioCapturer_->stop(); // 停止录音
@@ -304,14 +359,16 @@ void CRtmpPublisher::stopPush()
     QVector<AVPacket*> audioPackets = audioEncoder_->flush();
     for (AVPacket* pkt : audioPackets) {
         // 该流程为同步流程，随后改为异步流程时需要深拷贝
-        bool isKeyFrame = (pkt->flags & AV_PKT_FLAG_KEY) != 0;
-        rtmpPush_->sendAudio(pkt->data, pkt->size, pkt->dts, isKeyFrame);
+        rtmpPush_->sendAudio(pkt->data, pkt->size, pkt->dts);
         av_packet_unref(pkt);
         av_packet_free(&pkt);
     }
 
     // ------------------------- 关闭rtmpPush -------------------------
     rtmpPush_->disconnect();
+
+    //aacFile->close();
+    //h264File->close();
     cleanup(); // 清理所有资源
     qInfo() << "Recording stopped.";
 }
@@ -319,7 +376,7 @@ void CRtmpPublisher::stopPush()
 
 bool CRtmpPublisher::isRecording() const
 {
-    return isRecording_;
+    return isPushing_;
 }
 
 void CRtmpPublisher::cleanup()

@@ -151,6 +151,11 @@ bool CVideoEncoder::initialize(const VideoCodecCfg& cfg)
     return true;
 }
 
+void CVideoEncoder::resetTimestamp()
+{
+    ptsCnt_ = 0;
+}
+
 QVector<AVPacket*> CVideoEncoder::encode(const unsigned char* rgbData)
 {
     if (!codecCtx_ || !swsCtx_ || !yuvFrame_) {

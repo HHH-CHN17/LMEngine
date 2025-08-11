@@ -1,5 +1,6 @@
 #ifndef RTMP_PUBLISHER_H
 #define RTMP_PUBLISHER_H
+#include <QFile>
 
 extern "C" {
 
@@ -18,6 +19,25 @@ extern "C" {
 #include "AVRecorder/VideoEncoder/VideoEncoder.h"
 #include "RtmpPush/RtmpPush.h"
 #include "Common/DataDefine.h"
+
+#ifdef _WIN32
+#include <winsock2.h>
+
+// 应用程序在使用任何网络套接字 (socket) 功能之前，必须先调用 WSAStartup 函数来初始化 Winsock 库
+class WinsockGuard {
+public:
+    WinsockGuard() {
+        WSADATA wsaData;
+        int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+        if (result != 0) {
+            qFatal("WSAStartup failed with error: %d", result);
+        }
+    }
+    ~WinsockGuard() {
+        WSACleanup();
+    }
+};
+#endif
 
 class CRtmpPublisher : public QObject
 {
@@ -73,11 +93,21 @@ private:
     QScopedPointer<CAudioEncoder> audioEncoder_;
     QScopedPointer<CAudioCapturer> audioCapturer_;
 
+#ifdef _WIN32
+    WinsockGuard winsockGuard_{};
+#endif
+
     // 录制参数
     AVConfig config_{};
 
+    // 用于处理音视频时间戳
+    qint64 startTime_ = 0;
+
     // 状态管理
-    bool isRecording_ = false;
+    bool isPushing_ = false;
+
+    QFile* h264File = nullptr; // 用于调试，保存H264数据
+    QFile* aacFile = nullptr; // 用于调试，保存AAC数据
 };
 
 #endif // RTMP_PUBLISHER_H

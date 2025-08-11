@@ -43,7 +43,7 @@ void OpenGLWidget::initializeGL()
 	initializeOpenGLFunctions();
 
 	mainCtx_ = QOpenGLContext::currentContext();
-	qDebug() << mainCtx_;
+	//qDebug() << mainCtx_;
 
 	/*********************************** 初始化场景和多线程离屏资源 ***********************************/
 
@@ -327,11 +327,11 @@ void OpenGLWidget::resizeGL(int w, int h)
 }
 void OpenGLWidget::startRecord(avACT action)
 {
-	AVRational framerate{ 30, 1 };
+	AVRational framerate{ 15, 1 };
 	VideoCodecCfg videoCodecCfg{
 		recordW_, recordH_,
 		1920, 1080,
-		framerate, {1, 30},	// 时间基与帧率保持一致
+		framerate, {1, 15},	// 时间基与帧率保持一致
 		static_cast<int>(av_q2d(framerate)),	// 设置 GOP 大小：1秒一个I帧
 		1,		// 允许B帧
 		AV_PIX_FMT_YUV420P,
@@ -382,10 +382,11 @@ void OpenGLWidget::startRecord(avACT action)
 	else if (action == avACT::RTMPPUSH)
 	{
 		// 注意：rtmp推流时，为了保证视频数据的及时性，需要考虑降低帧率，缩短IDR帧间隔，这些参数需要修改AVCodecContext的参数
-		config.path_ = "";
+		config.path_ = "rtmp://192.168.232.128/live/livestream";
 		qDebug() << "connect RTMP server to: " << config.path_.c_str();
 
 		Q_ASSERT(CRtmpPublisher::GetInstance()->initialize(config));
+		CRtmpPublisher::GetInstance()->startPush();
 		isRtmpPush_ = true;
 	}
 	else if (action == avACT::RTSPPUSH)
@@ -472,7 +473,7 @@ void OpenGLWidget::rtmpPush(GLubyte* ptr)
 {
 	if (!isRtmpPush_)
 		qDebug() << "can't push to rtmp server!";
-	assert(CRtmpPublisher::GetInstance()->pushing(ptr));
+	Q_ASSERT(CRtmpPublisher::GetInstance()->pushing(ptr));
 }
 
 void OpenGLWidget::rtspPush(GLubyte* ptr)
@@ -490,6 +491,7 @@ void OpenGLWidget::stopRecord(avACT action)
 	else if (action == avACT::RTMPPUSH)
 	{
 		isRtmpPush_ = false;
+		CRtmpPublisher::GetInstance()->stopPush();
 	}
 	else if (action == avACT::RTSPPUSH)
 	{

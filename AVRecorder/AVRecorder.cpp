@@ -171,13 +171,14 @@ void CAVRecorder::startRecording()
 
     audioCapturer_->start(); // 开始录音，填充音频缓冲区
 
+	// ------------------------- 写入调试信息 -------------------------
 	h264File = new QFile(qApp->applicationDirPath() + "/" + "h264_data.h264");
     if (h264File->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         qInfo() << "H264 file opened for writing.";
     } else {
         qCritical() << "Failed to open H264 file for writing.";
 	}
-    h264File->write(reinterpret_cast<const char*>(videoEncoder_->getCodecContext()->extradata), videoEncoder_->getCodecContext()->extradata_size);
+    //h264File->write(reinterpret_cast<const char*>(videoEncoder_->getCodecContext()->extradata), videoEncoder_->getCodecContext()->extradata_size);
 
 	aacFile = new QFile(qApp->applicationDirPath() + "/" + "aac_data.aac");
     if (aacFile->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
@@ -185,7 +186,11 @@ void CAVRecorder::startRecording()
     } else {
 		qCritical() << "Failed to open AAC file for writing.";
 	}
-	aacFile->write(reinterpret_cast<const char*>(audioEncoder_->getCodecContext()->extradata), audioEncoder_->getCodecContext()->extradata_size);
+	//aacFile->write(reinterpret_cast<const char*>(audioEncoder_->getCodecContext()->extradata), audioEncoder_->getCodecContext()->extradata_size);
+
+	// ------------------------- 重置时间戳 -------------------------
+    audioEncoder_->resetTimestamp();
+    videoEncoder_->resetTimestamp();
 
     isRecording_ = true;
     qInfo() << "Recording started.";
@@ -235,7 +240,7 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
     QVector<AVPacket*> videoPackets = videoEncoder_->encode(rgbData);
     for (AVPacket* pkt : videoPackets) 
     {
-        h264File->write(reinterpret_cast<const char*>(pkt->data), pkt->size);
+        //h264File->write(reinterpret_cast<const char*>(pkt->data), pkt->size);
         muxer_->writePacket(pkt);
         //av_packet_unref(pkt);
         av_packet_free(&pkt);
@@ -266,7 +271,7 @@ bool CAVRecorder::recording(const unsigned char* rgbData)
                 << "size:" << pkt->size
                 << "pts:" << pkt->pts
                 << "dts:" << pkt->dts;*/
-			aacFile->write(reinterpret_cast<const char*>(pkt->data), pkt->size);
+			//aacFile->write(reinterpret_cast<const char*>(pkt->data), pkt->size);
             muxer_->writePacket(pkt);
             av_packet_unref(pkt);
             av_packet_free(&pkt);

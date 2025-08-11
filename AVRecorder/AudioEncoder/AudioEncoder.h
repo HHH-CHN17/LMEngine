@@ -36,6 +36,12 @@ public:
     bool initialize(const AudioCodecCfg& dstFmt, const AudioFormat& srcFmt);
 
     /**
+     * @brief 在开始推流/录制音视频时调用，
+     *          用于清空时间戳，可以反复录制/推流。
+     */
+    void resetTimestamp();
+
+    /**
      * @brief 编码一帧音频数据。
      * @param pcmData 指向原始 S16 (交错格式) PCM 数据的指针。
      * @return 返回一个包含零个或多个编码好的 AVPacket 的列表。

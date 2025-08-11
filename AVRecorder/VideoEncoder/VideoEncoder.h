@@ -27,6 +27,12 @@ public:
     bool initialize(const VideoCodecCfg& cfg);
 
     /**
+     * @brief 在开始推流/录制音视频时调用，
+     *          用于清空时间戳，可以反复录制/推流。
+     */
+    void resetTimestamp();
+
+    /**
      * @brief 编码一帧视频数据。
      * @param rgbData 指向原始RGBA数据的指针（大小必须是 inWidth * inHeight * 4）。
      * @return 返回一个包含零个或多个编码好的 AVPacket 的列表。

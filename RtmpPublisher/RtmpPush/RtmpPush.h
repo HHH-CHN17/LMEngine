@@ -23,7 +23,7 @@ extern "C" {
  */
 class CRtmpPush {
 public:
-    explicit CRtmpPush(int log_level = RTMP_LOGINFO);
+    explicit CRtmpPush(int log_level = RTMP_LOGWARNING);
 
     ~CRtmpPush();
 
@@ -71,10 +71,9 @@ public:
      * @param data 指向 AAC 原始数据帧的指针 (不含 ADTS 头)。
      * @param len 数据长度
      * @param dts 解码时间戳 (毫秒)
-     * @param is_sequence_header 是否为 AAC Sequence Header
      * @return true 发送成功, false 发送失败
      */
-    bool sendAudio(const uint8_t* data, size_t len, uint32_t dts, bool is_sequence_header);
+    bool sendAudio(const uint8_t* data, size_t len, uint32_t dts);
 
 private:
 	/**
@@ -112,13 +111,12 @@ private:
      * @param data AAC 数据
      * @param len 数据长度
      * @param dts 时间戳
-     * @param is_sequence_header 是否为 Sequence Header
      * @return 创建好的 RTMPPacket 指针 (需要调用者负责释放或发送后由 sendPacket 释放)
      */
-    RTMPPacket* createAudioPacket(const uint8_t* data, size_t len, uint32_t dts, bool is_sequence_header);
+    RTMPPacket* createAudioPacket(const uint8_t* data, size_t len, uint32_t dts);
 
 private:
-    std::unique_ptr<RTMP, decltype(&RTMP_Free)> rtmpPtr_; // 使用智能指针管理 RTMP 对象
+    std::unique_ptr<RTMP, decltype(&RTMP_Free)> rtmpPtr_{ nullptr, &RTMP_Free }; // 使用智能指针管理 RTMP 对象
     bool isConnected_ = false;
     std::vector<uint8_t> sps_{}; // 缓存 SPS
     std::vector<uint8_t> pps_{}; // 缓存 PPS
