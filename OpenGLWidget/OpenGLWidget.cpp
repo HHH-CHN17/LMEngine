@@ -327,11 +327,11 @@ void OpenGLWidget::resizeGL(int w, int h)
 }
 void OpenGLWidget::startRecord(avACT action)
 {
-	AVRational framerate{ 15, 1 };
+	AVRational framerate{ 30, 1 };
 	VideoCodecCfg videoCodecCfg{
 		recordW_, recordH_,
 		1920, 1080,
-		framerate, {1, 15},	// 时间基与帧率保持一致
+		framerate, {1, 30},	// 时间基与帧率保持一致
 		static_cast<int>(av_q2d(framerate)),	// 设置 GOP 大小：1秒一个I帧
 		1,		// 允许B帧
 		AV_PIX_FMT_YUV420P,
