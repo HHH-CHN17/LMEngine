@@ -5,7 +5,16 @@
 #include <cstddef>
 #include <algorithm> 
 #include <cstring>
-#include <new>       
+#include <new>
+
+#ifdef __cpp_lib_hardware_interference_size
+using std::hardware_destructive_interference_size;
+#else
+// x86 - 64上为64字节 │ L1_CACHE_BYTES │ L1_CACHE_SHIFT │ __cacheline_aligned │...
+// L1缓存行大小通常是64字节
+constexpr std::size_t hardware_destructive_interference_size = 64;
+#endif
+
 
 class SpscRingBuffer
 {
@@ -134,7 +143,7 @@ private:
 
 private:
     // C++17 标准中用于避免伪共享的常量
-    static constexpr size_t CACHELINE_SIZE = std::hardware_destructive_interference_size;
+    static constexpr size_t CACHELINE_SIZE = hardware_destructive_interference_size;
 
     // 生产者和消费者在不同线程上修改，使用 alignas 避免伪共享
     alignas(CACHELINE_SIZE) std::atomic<size_t> head_ = { 0 };

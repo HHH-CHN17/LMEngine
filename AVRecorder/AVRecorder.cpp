@@ -272,6 +272,7 @@ void CAVRecorder::stopRecording() {
     // 【关键】在所有线程都已结束后，才能安全地执行最后的清理工作
     qInfo() << "Flushing final packets and closing muxer...";
 
+    编码器中的残留帧需要在线程停止的时候在循环外面pop出来。
     // 清空编码器中可能残留的帧
     QVector<AVPacket*> videoPackets = videoEncoder_->flush();
     for (AVPacket* pkt : videoPackets) {
@@ -407,6 +408,8 @@ void CAVRecorder::stopThreads() {
     qInfo() << "All background threads have been successfully joined.";
 }
 
+MediaPacket应当取消
+
 void CAVRecorder::videoEncodingLoop()
 {
     qInfo() << "[Thread: VideoEncoder] Loop started.";
@@ -425,6 +428,28 @@ void CAVRecorder::videoEncodingLoop()
 		rawFrame = std::move(*rawFramePtr);
 
         QVector<AVPacket*> packets = videoEncoder_->encode(rawFrame.rgba_data.data());
+        写成lambda函数，减少代码量
+        // 3. 将编码后的裸指针AVPacket打包成MediaPacket并放入下一个队列
+        for (AVPacket* pkt : packets)
+        {
+            if (!pkt) continue; // 安全检查
+
+            MediaPacket mediaPkt;
+            mediaPkt.pkt = AVPacketUPtr(pkt); // 将裸指针的所有权交给unique_ptr
+            mediaPkt.type = PacketType::VIDEO;
+
+            // 将包含 AVPacket 的 MediaPacket 移入队列，所有权再次转移
+            encodedPacketQueue_.push(std::move(mediaPkt));
+        }
+    }
+
+	// 线程结束后，编码剩余的帧，清空rawVideoQueue_中缓存
+    while (auto rawFramePtr = rawVideoQueue_.pop())
+    {
+        // 从智能指针中移出数据，避免拷贝
+        rawFrame = std::move(*rawFramePtr);
+
+        QVector<AVPacket*> packets = videoEncoder_->encode(rawFrame.rgba_data.data());
 
         // 3. 将编码后的裸指针AVPacket打包成MediaPacket并放入下一个队列
         for (AVPacket* pkt : packets)
@@ -440,7 +465,20 @@ void CAVRecorder::videoEncodingLoop()
         }
     }
 
+    // 编码完剩余的帧后，调用flush()清空编码器缓存;
+    QVector<AVPacket*> videoPackets = videoEncoder_->flush();
+    
+    for (AVPacket* pkt : videoPackets) 
+    {
+        if (!pkt) continue; // 安全检查
 
+        MediaPacket mediaPkt;
+        mediaPkt.pkt = AVPacketUPtr(pkt); // 将裸指针的所有权交给unique_ptr
+        mediaPkt.type = PacketType::VIDEO;
+
+        // 将包含 AVPacket 的 MediaPacket 移入队列，所有权再次转移
+        encodedPacketQueue_.push(std::move(mediaPkt));
+    }
 
     qInfo() << "[Thread: VideoEncoder] Loop finished.";
 }
@@ -457,7 +495,6 @@ void CAVRecorder::audioEncodingLoop()
         return;
     }
 
-    // 只要"总闸" isRunning_ 是开着的，就一直循环
     while (isRunning_.load(std::memory_order_relaxed)) 
     {
         // 1. 从音频捕获器（内部是我们的无锁环形缓冲区）读取数据
@@ -485,14 +522,28 @@ void CAVRecorder::audioEncodingLoop()
             encodedPacketQueue_.push(std::move(mediaPkt));
         }
     }
+
+    QVector<AVPacket*> audioPackets = audioEncoder_->flush();
+    for (AVPacket* pkt : audioPackets) 
+    {
+        if (!pkt) continue; // 安全检查
+
+        MediaPacket mediaPkt;
+        mediaPkt.pkt = AVPacketUPtr(pkt); // 将裸指针的所有权交给unique_ptr
+        mediaPkt.type = PacketType::AUDIO;
+
+        // 将包含 AVPacket 的 MediaPacket 移入队列，所有权再次转移
+        encodedPacketQueue_.push(std::move(mediaPkt));
+    }
+
     qInfo() << "[Thread: AudioEncoder] Loop finished.";
 }
 
 void CAVRecorder::muxingLoop() {
     qInfo() << "[Thread: Muxer] Loop started.";
-    bool running = true;
+    //bool running = true;
 
-    while (running) {
+    while (isRunning_.load(std::memory_order_relaxed)) {
         // 1. 从队列中取出编码好的数据包
         auto popped_packet_ptr = encodedPacketQueue_.pop();
 
@@ -504,7 +555,9 @@ void CAVRecorder::muxingLoop() {
             continue;
         }
 
-        MediaPacket mediaPacket = std::move(*popped_packet_ptr);
+        muxer_->writePacket(popped_packet_ptr->pkt.get());
+
+        /*MediaPacket mediaPacket = std::move(*popped_packet_ptr);
 
         // 3. 根据包类型进行处理
         switch (mediaPacket.type) {
@@ -517,10 +570,17 @@ void CAVRecorder::muxingLoop() {
         case PacketType::END_OF_STREAM:
             // 收到哨兵包，这是我们优雅退出的信号
             qInfo() << "[Thread: Muxer] Received EOS signal. Shutting down.";
-            running = false; // 设置循环退出标志
+            //running = false; // 设置循环退出标志
             break;
-        }
+        }*/
     }
+
+	// 4. 循环结束后，清空无锁队列中的所有剩余包
+    while (auto popped_packet_ptr = encodedPacketQueue_.pop())
+    {
+        muxer_->writePacket(popped_packet_ptr->pkt.get());
+    }
+
     qInfo() << "[Thread: Muxer] Loop finished.";
 }
 
