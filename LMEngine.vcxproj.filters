@@ -224,7 +224,7 @@
     <ClInclude Include="Common\DataDefine.h">
       <Filter>Source\Common</Filter>
     </ClInclude>
-    <ClInclude Include="Common\MsgQueue.h">
+    <ClInclude Include="Common\LockFreeQueue.h">
       <Filter>Source\Common</Filter>
     </ClInclude>
     <ClInclude Include="OpenGLWidget\SceneManger\Object\Model\GLModel.h">
@@ -253,6 +253,9 @@
     </ClInclude>
     <ClInclude Include="RtmpPublisher\RtmpPush\RtmpPush.h">
       <Filter>Source\RtmpPublisher\RtmpPush</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\SPSCRingBuffer.h">
+      <Filter>Source\Common</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

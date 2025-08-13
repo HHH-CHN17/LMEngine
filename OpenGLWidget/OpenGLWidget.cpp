@@ -466,7 +466,8 @@ void OpenGLWidget::recordAV(GLubyte* ptr)
 	if (!isRecording_)
 		qDebug() << "can't record video!";
 	//assert(CAVRecorder::GetInstance()->recording(ptr));
-	CAVRecorder::GetInstance()->recording(ptr);
+	//CAVRecorder::GetInstance()->recording(ptr);
+	CAVRecorder::GetInstance()->enqueueVideoFrame(ptr);
 }
 
 void OpenGLWidget::rtmpPush(GLubyte* ptr)

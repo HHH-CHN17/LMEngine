@@ -7,6 +7,8 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <QDebug>
 #include <QAudioFormat>
+#include <memory>
+#include <vector>
 
 extern "C" {
 #include <libavutil/rational.h>
@@ -129,3 +131,46 @@ typedef struct AVConfig {
     // 录音设备参数
     AudioFormat    audioFmt_;
 }AVConfig;
+
+// ------------------------- 音视频录制/推流异步改造 -------------------------
+
+struct AVPacketDeleter {
+    void operator()(AVPacket* pkt) const {
+        if (pkt) {
+            av_packet_unref(pkt);
+            av_packet_free(&pkt);
+        }
+    }
+};
+
+/*
+ *  AVPacket生命流程：
+ *  1. 由Encoder创建。
+ *	2. 所有权转移给MediaPacket结构体。
+ *	3. 所有权随着MediaPacket被std::move转移到队列中。
+ *	4. Muxer从队列中取出MediaPacket，再次获得所有权。
+ *	5. Muxer使用完毕后，MediaPacket被销毁，其拥有的AVPacket也应随之销毁。
+ *	在以上流程中，AVPacket同一时间只会被一个消费者持有，不会被拷贝，AVPacket内部的引用计数始终为1，所以使用unique_ptr进行管理。
+ *	在后续改造中，如果对于每一个AVPacket而言既需要录制，又需要推流，则需要改为shared_ptr，同时使用av_packet_ref增加引用计数。
+ */
+
+using AVPacketUPtr = std::unique_ptr<AVPacket, AVPacketDeleter>;
+
+struct RawVideoFrame {
+    std::vector<uint8_t> rgba_data;
+    int width;
+    int height;
+	bool is_end_of_stream = false; // 用于标记是否为结束帧
+};
+
+enum class PacketType : uint8_t
+{
+	VIDEO,
+	AUDIO,
+	END_OF_STREAM
+};
+
+struct MediaPacket {
+    AVPacketUPtr pkt;
+    PacketType type;
+};
