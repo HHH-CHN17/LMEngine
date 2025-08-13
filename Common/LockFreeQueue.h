@@ -184,7 +184,9 @@ public:
 	// 如果使用 T，由于T在实例化类模板时已经确定
 	// 所以在调用push时，T&&不是万能引用
     template<typename U,
-		typename std::void_t<std::enable_if_t<std::is_same_v<value_type, std::decay_t<U>>,int> = 0>???
+		std::enable_if_t<
+			std::is_same_v<value_type, std::decay_t<U>>,    // 退化U应当和value_type类型相同
+		int> = 0
 	>
     void push(U&& new_value)
 	{
