@@ -385,6 +385,7 @@ void OpenGLWidget::startRecord(avACT action)
 		config.path_ = "rtmp://192.168.232.128/live/livestream";
 		qDebug() << "connect RTMP server to: " << config.path_.c_str();
 
+		config.videoCodecCfg_.max_b_frames_ = 0;	// Ö±²¥½ûÖ¹BÖ¡
 		Q_ASSERT(CRtmpPublisher::GetInstance()->initialize(config));
 		CRtmpPublisher::GetInstance()->startPush();
 		isRtmpPush_ = true;

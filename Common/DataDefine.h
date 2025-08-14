@@ -172,6 +172,7 @@ enum class PacketType : uint8_t
 	END_OF_STREAM
 };
 
+// 由于unique_ptr只能移动不能复制，所以MediaPacket也只能移动不能复制
 struct MediaPacket {
     AVPacketUPtr pkt;
     PacketType type;

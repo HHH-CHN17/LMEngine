@@ -160,37 +160,6 @@ bool CAVRecorder::initialize(AVConfig& config)
     return true;
 }
 
-/*void CAVRecorder::startRecording()
-{
-    if (isRecording_) return;
-
-    audioCapturer_->start(); // 开始录音，填充音频缓冲区
-
-	// ------------------------- 写入调试信息 -------------------------
-	h264File = new QFile(qApp->applicationDirPath() + "/" + "h264_data.h264");
-    if (h264File->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        qInfo() << "H264 file opened for writing.";
-    } else {
-        qCritical() << "Failed to open H264 file for writing.";
-	}
-    //h264File->write(reinterpret_cast<const char*>(videoEncoder_->getCodecContext()->extradata), videoEncoder_->getCodecContext()->extradata_size);
-
-	aacFile = new QFile(qApp->applicationDirPath() + "/" + "aac_data.aac");
-    if (aacFile->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        qInfo() << "AAC file opened for writing.";
-    } else {
-		qCritical() << "Failed to open AAC file for writing.";
-	}
-	//aacFile->write(reinterpret_cast<const char*>(audioEncoder_->getCodecContext()->extradata), audioEncoder_->getCodecContext()->extradata_size);
-
-	// ------------------------- 重置时间戳 -------------------------
-    audioEncoder_->resetTimestamp();
-    videoEncoder_->resetTimestamp();
-
-    isRecording_ = true;
-    qInfo() << "Recording started.";
-}*/
-
 void CAVRecorder::startRecording() {
     if (isRecording_.load()) 
     {
@@ -214,40 +183,6 @@ void CAVRecorder::startRecording() {
 
     qInfo() << "Asynchronous recording process started.";
 }
-
-/*void CAVRecorder::stopRecording()
-{
-    if (!isRecording_) return;
-
-    isRecording_ = false;
-    qInfo() << "Stopping recording...";
-
-    audioCapturer_->stop(); // 停止录音
-
-    qInfo() << "Flushing encoders...";
-
-    // ------------------------- 清空视频编码器缓存 -------------------------
-    QVector<AVPacket*> videoPackets = videoEncoder_->flush();
-    for (AVPacket* pkt : videoPackets) {
-        muxer_->writePacket(pkt);
-        av_packet_free(&pkt);
-    }
-
-    // ------------------------- 清空音频编码器中缓存 -------------------------
-    QVector<AVPacket*> audioPackets = audioEncoder_->flush();
-    for (AVPacket* pkt : audioPackets) {
-        muxer_->writePacket(pkt);
-        av_packet_free(&pkt);
-    }
-
-    // ------------------------- 关闭muxer -------------------------
-    muxer_->close();
-
-    aacFile->close();
-	h264File->close();
-    cleanup(); // 清理所有资源
-    qInfo() << "Recording stopped.";
-}*/
 
 void CAVRecorder::stopRecording() {
     if (!isRecording_.exchange(false)) {
@@ -282,7 +217,7 @@ void CAVRecorder::pushRGBA(const unsigned char* rgbaData) {
     }
 
 	// 这里使用unique_ptr，只需要分配一次堆内存，如果直接使用vector，会发生两次堆内存分配：一次在此处，一次在lock_free_queue的push函数中。
-    RGBAUPtr uptr_rgba = std::make_unique<std::vector<uint8_t>>{};
+    auto uptr_rgba = std::make_unique<std::vector<uint8_t>>();
     const size_t dataSize = static_cast<size_t>(config_.videoCodecCfg_.in_width_) * config_.videoCodecCfg_.in_height_ * 4;
     uptr_rgba->resize(dataSize);
     memcpy(uptr_rgba->data(), rgbaData, dataSize);
@@ -355,7 +290,7 @@ void CAVRecorder::sendVecPkt(const QVector<AVPacket*>& packets, const PacketType
 		MediaPacket mediaPkt{ AVPacketUPtr{ pkt }, type };
 
         // 将包含 AVPacket 的 MediaPacket 移入队列，所有权再次转移
-        encodedPktQueue_.push(mediaPkt);
+        encodedPktQueue_.push(std::move(mediaPkt));
     }
 }
 
@@ -368,6 +303,12 @@ void CAVRecorder::videoEncodingLoop()
     {
 		// pop出来的值有两层unique_ptr，第一层是lock_free_queue的容器，第二层是存储RGBA数据的unique_ptr
         auto container = rawVideoQueue_.pop();
+        if (!container) 
+        {
+            // 如果队列为空，短暂休眠，避免忙等
+            std::this_thread::yield();
+            continue;
+		}
         RGBAUPtr& pRawData = *container;
         if (!pRawData) 
         {
@@ -391,7 +332,7 @@ void CAVRecorder::videoEncodingLoop()
 
     // ------------------------- 最后发送哨兵包，表示当前流的编码流程结束 -------------------------
     MediaPacket eosPkt{ AVPacketUPtr{ nullptr }, PacketType::END_OF_STREAM };
-    encodedPktQueue_.push(eosPkt);
+    encodedPktQueue_.push(std::move(eosPkt));
 
     qInfo() << "[Thread: VideoEncoder] Loop finished.";
 }
@@ -413,7 +354,11 @@ void CAVRecorder::audioEncodingLoop()
     {
         QByteArray pcmChunk = audioCapturer_->readChunk(audioBytesPerFrame);
         if (pcmChunk.isEmpty() || pcmChunk.size() < audioBytesPerFrame)
+        {
+            std::this_thread::yield();
             continue;
+        }
+            
         sendVecPkt(
             audioEncoder_->encode(reinterpret_cast<const uint8_t*>(pcmChunk.constData())),
             PacketType::AUDIO
@@ -437,7 +382,7 @@ void CAVRecorder::audioEncodingLoop()
 
     // ------------------------- 最后发送哨兵包，表示当前流的编码流程结束 -------------------------
     MediaPacket eosPkt{ AVPacketUPtr{ nullptr }, PacketType::END_OF_STREAM };
-    encodedPktQueue_.push(eosPkt);
+    encodedPktQueue_.push(std::move(eosPkt));
 
     qInfo() << "[Thread: AudioEncoder] Loop finished.";
 }
@@ -453,6 +398,12 @@ void CAVRecorder::muxingLoop() {
     {
         // pop出来的值有两层unique_ptr，第一层是lock_free_queue的容器，第二层是存储packet的unique_ptr
         auto container = encodedPktQueue_.pop();
+        if (!container)
+        {
+            // 如果队列为空，短暂休眠，避免忙等
+            std::this_thread::yield();
+            continue;
+        }
         MediaPacket& upPkt = *container;
 
         switch (upPkt.type)

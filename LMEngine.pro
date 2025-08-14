@@ -120,6 +120,7 @@ HEADERS += \
     ./Common/DataDefine.h \
     ./Common/LockFreeQueue.h \
     ./Common/SPSCRingBuffer.h \
+    ./Common/SingletonBase.h \
     ./RtmpPublisher/RtmpPublisher.h \
     ./RtmpPublisher/RtmpPush/RtmpPush.h
 

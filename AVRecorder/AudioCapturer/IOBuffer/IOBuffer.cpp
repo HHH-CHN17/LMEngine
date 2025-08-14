@@ -20,6 +20,14 @@ qint64 CIOBuffer::writeData(const char* data, qint64 len)
         buffer_.append(data, len);
 	}*/
 
+	size_t has_write = 0;
+    size_t expect = len;
+
+	while (has_write < expect)
+	{
+        has_write += ringBuffer_.write(data, len);
+	}
+    
 
     return len;
 }

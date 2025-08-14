@@ -6,6 +6,7 @@
 #include <algorithm> 
 #include <cstring>
 #include <new>
+#include <QDebug>
 
 #ifdef __cpp_lib_hardware_interference_size
 using std::hardware_destructive_interference_size;

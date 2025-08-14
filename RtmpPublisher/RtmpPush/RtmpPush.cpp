@@ -136,8 +136,8 @@ bool CRtmpPush::sendVideo(const uint8_t* data, size_t len, uint32_t dts, bool is
         return false;
     }
 
-    qDebug() << "Sending Video data, length:" << len << ", dts:" << dts
-		<< ", is_keyframe:" << (is_keyframe ? "true" : "false");
+    //qDebug() << "Sending Video data, length:" << len << ", dts:" << dts
+		//<< ", is_keyframe:" << (is_keyframe ? "true" : "false");
 
     // 如果是关键帧且 SPS/PPS 还没发送，则先发送
     if (is_keyframe && !sps_pps_sent_ && !sps_.empty() && !pps_.empty()) {
@@ -162,7 +162,7 @@ bool CRtmpPush::sendAudio(const uint8_t* data, size_t len, uint32_t dts) {
         return false;
     }
 
-	qDebug() << "Sending Audio data, length:" << len << ", dts:" << dts;
+	//qDebug() << "Sending Audio data, length:" << len << ", dts:" << dts;
 
     // 如果是 Sequence Header 且还没发送，则先发送
     if (!asc_sent_ && !asc_.empty()) {

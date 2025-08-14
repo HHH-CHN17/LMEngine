@@ -188,7 +188,7 @@ void CRtmpPublisher::startPush()
     if (isPushing_) return;
 
 	// ------------------------- 写入h.264文件头，数据 -------------------------
-    /*QFile h264head = QFile(qApp->applicationDirPath() + "/" + "h264_head.h264");
+    QFile h264head = QFile(qApp->applicationDirPath() + "/" + "h264_head.h264");
     if (h264head.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         qInfo() << "H264 file opened for writing.";
     }
@@ -223,7 +223,7 @@ void CRtmpPublisher::startPush()
     }
     else {
         qCritical() << "Failed to open AAC file for writing.";
-    }*/
+    }
 
     // ------------------------- 发送流媒体数据之前，需要发送H.264和AAC的配置信息 -------------------------
 
@@ -262,7 +262,7 @@ bool CRtmpPublisher::pushing(const unsigned char* rgbData)
     if (!isPushing_) return false;
     if (!rgbData) return false;
 
-    // todo 推流编码后的音视频包时，需要交错推送
+    // 推流后，部分拉流的播放器会有画面抖动的现象（vlc没有），原因是发送了B帧，他妈的
 
     // ------------------------- 视频编码 -------------------------
     // 1. 视频可以直接编码
@@ -294,7 +294,7 @@ bool CRtmpPublisher::pushing(const unsigned char* rgbData)
 			continue;
         }
 
-        //h264File->write(reinterpret_cast<const char*>(pkt->data), pkt->size);
+        h264File->write(reinterpret_cast<const char*>(pkt->data), pkt->size);
         rtmpPush_->sendVideo(pkt->data + startCodeLen, pkt->size - startCodeLen, pkt->dts, isKeyFrame);
         av_packet_unref(pkt);
         av_packet_free(&pkt);
@@ -326,7 +326,22 @@ bool CRtmpPublisher::pushing(const unsigned char* rgbData)
                 << "pts:" << pkt->pts
                 << "dts:" << pkt->dts;*/
         	// 该流程为同步流程，随后改为异步流程时需要深拷贝
-            //aacFile->write(reinterpret_cast<const char*>(pkt->data), pkt->size);
+            static bool firstAudioPacketSent_ = false;
+            if (!firstAudioPacketSent_)
+            {
+                // FFmpeg 的 aac 编码器在全局头模式下，
+				// 有时会先输出一个包含 "Lavc" 版本信息的非音频数据包。
+                if (pkt->size > 4 && pkt->data[0] == 0xDE && pkt->data[1] == 0x04) 
+                {
+                    qDebug() << "Skipping first AAC info packet (Lavc).";
+                    av_packet_unref(pkt);
+                    av_packet_free(&pkt);
+                    firstAudioPacketSent_ = true;
+                    continue;
+                }
+            }
+
+            aacFile->write(reinterpret_cast<const char*>(pkt->data), pkt->size);
             rtmpPush_->sendAudio(pkt->data, pkt->size, pkt->dts);
             av_packet_unref(pkt);
             av_packet_free(&pkt);
@@ -369,8 +384,8 @@ void CRtmpPublisher::stopPush()
     // ------------------------- 关闭rtmpPush -------------------------
     rtmpPush_->disconnect();
 
-    //aacFile->close();
-    //h264File->close();
+    aacFile->close();
+    h264File->close();
     cleanup(); // 清理所有资源
     qInfo() << "Recording stopped.";
 }
