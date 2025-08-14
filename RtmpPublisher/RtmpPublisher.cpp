@@ -262,6 +262,8 @@ bool CRtmpPublisher::pushing(const unsigned char* rgbData)
     if (!isPushing_) return false;
     if (!rgbData) return false;
 
+    // todo 推流编码后的音视频包时，需要交错推送
+
     // ------------------------- 视频编码 -------------------------
     // 1. 视频可以直接编码
     QVector<AVPacket*> videoPackets = videoEncoder_->encode(rgbData);

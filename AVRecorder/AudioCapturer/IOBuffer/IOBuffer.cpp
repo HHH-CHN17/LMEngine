@@ -43,6 +43,7 @@ QByteArray CIOBuffer::readChunk(qint64 chunkSize)
     QByteArray chunk{ static_cast<int>(chunkSize), Qt::Initialization::Uninitialized };
 
     // 从环形缓冲区读取数据
+	// 该函数返回值只可能有两种结果：bytes_read==0 or bytes_read==chunkSize
     size_t bytes_read = ringBuffer_.read(chunk.data(), chunkSize);
 
     // 如果没读够，说明数据不足，返回空

@@ -78,7 +78,7 @@ public:
      * @brief [消费者线程调用] 从缓冲区读取数据。
      * @param data 指向用于存放读取数据的缓冲区的指针。
      * @param bytes 要读取的字节数。
-     * @return 实际读取的字节数（可能小于请求数，如果缓冲区数据不足）。
+     * @return 实际读取的字节数（必须和bytes相等，否则return 0）。
      */
     [[nodiscard]] size_t read(char* data, size_t bytes) noexcept
     {
@@ -90,7 +90,7 @@ public:
         const size_t bytes_available = current_head - current_tail;
         const size_t bytes_to_read = std::min(bytes, bytes_available);
 
-        if (bytes_to_read == 0) {
+        if (bytes_to_read != bytes) {
             return 0;
         }
 

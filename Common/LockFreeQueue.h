@@ -31,7 +31,7 @@
 template<typename T, size_t LENGTH = 100>
 class lock_free_queue
 {
-    // 注意，我们期望
+	// 注意，我们期望push时按值传递，pop时按引用返回，所以value_type必须是T的退化类型
     using value_type = std::decay_t<T>;
 private:
     struct node;

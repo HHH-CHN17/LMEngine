@@ -257,6 +257,7 @@
     </QtRcc>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Common\SingletonBase.h" />
     <ClInclude Include="Common\SPSCRingBuffer.h" />
     <ClInclude Include="RtmpPublisher\RtmpPush\RtmpPush.h" />
     <QtMoc Include="RtmpPublisher\RtmpPublisher.h" />

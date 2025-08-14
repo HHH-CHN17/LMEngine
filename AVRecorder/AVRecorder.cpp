@@ -1,6 +1,9 @@
 #include "AVRecorder.h"
+
 #include <QDebug>
 #include <qguiapplication.h>
+
+using namespace std;
 
 #ifdef DEBUG
 static void ffmpeg_log_callback(void* ptr, int level, const char* fmt, va_list vargs)
@@ -55,8 +58,7 @@ static void avCheckRet(const char* operate, int ret)
 }
 
 
-CAVRecorder::CAVRecorder(QObject* parent)
-    : QObject(parent)
+CAVRecorder::CAVRecorder()
 {
     av_register_all();
     avcodec_register_all();
@@ -68,13 +70,6 @@ CAVRecorder::~CAVRecorder()
     {
         stopRecording();
     }
-}
-
-CAVRecorder* CAVRecorder::GetInstance()
-{
-    static CAVRecorder objAVRecorder{};
-
-    return &objAVRecorder;
 }
 
 QAudioFormat CAVRecorder::setAudioFormat(const AudioFormat& config)
@@ -255,94 +250,45 @@ void CAVRecorder::startRecording() {
 }*/
 
 void CAVRecorder::stopRecording() {
-    if (!isRecording_.load()) {
+    if (!isRecording_.exchange(false)) {
         return;
     }
-
     qInfo() << "Stopping recording process...";
-
-    // 虽然 `isRunning_` 也会设为 false，但 isRecording_ 更明确地表示录制意图
-    isRecording_.store(false);
 
     audioCapturer_->stop(); // 停止录音
 
-    // 停止并等待所有后台线程完成它们的工作（清空缓冲区等）
     stopThreads();
 
-    // 【关键】在所有线程都已结束后，才能安全地执行最后的清理工作
     qInfo() << "Flushing final packets and closing muxer...";
-
-    编码器中的残留帧需要在线程停止的时候在循环外面pop出来。
-    // 清空编码器中可能残留的帧
-    QVector<AVPacket*> videoPackets = videoEncoder_->flush();
-    for (AVPacket* pkt : videoPackets) {
-        muxer_->writePacket(pkt);
-        av_packet_free(&pkt);
-    }
-    QVector<AVPacket*> audioPackets = audioEncoder_->flush();
-    for (AVPacket* pkt : audioPackets) {
-        muxer_->writePacket(pkt);
-        av_packet_free(&pkt);
-    }
-
-    // 写入文件尾并关闭文件
     muxer_->close();
-
-    // 释放所有FFmpeg相关的上下文资源
     cleanup();
+
+    //aacFile->close();
+    //h264File->close();
 
     qInfo() << "Recording process stopped and resources cleaned up.";
 }
 
-bool CAVRecorder::recording(const unsigned char* rgbData)
-{
-    if (!isRecording_) return false;
-    if (!rgbData) return false;
-
-    // ------------------------- 视频编码 -------------------------
-    // 1. 视频可以直接编码
-    QVector<AVPacket*> videoPackets = videoEncoder_->encode(rgbData);
-    for (AVPacket* pkt : videoPackets) 
-    {
-        //h264File->write(reinterpret_cast<const char*>(pkt->data), pkt->size);
-        muxer_->writePacket(pkt);
-        //av_packet_unref(pkt);
-        av_packet_free(&pkt);
+void CAVRecorder::pushRGBA(const unsigned char* rgbaData) {
+    // 1. 检查录制状态，如果已停止，则忽略新来的帧
+    if (!isRecording_.load(std::memory_order_relaxed) || !rgbaData) {
+        return;
     }
 
-    // ------------------------- 音频编码 -------------------------
-    // 计算编码一帧音频需要多少字节
-    const int audioBytesPerFrame = audioEncoder_->getBytesPerFrame();
-    //qDebug() << "audioBytesPerFrame: " << audioBytesPerFrame;
-    // 循环处理所有在缓冲区中积累的完整音频帧
-    while (true) 
-    {
-        QByteArray pcmChunk;
-        {
-            pcmChunk = audioCapturer_->readChunk(audioBytesPerFrame);
-            if (pcmChunk.isEmpty())
-            {
-                //qDebug() << "need more pcm data to encode";
-                break; // 音频数据不够一帧
-            }
-        }
-
-        // 2. 音频需要先获取PCM，再编码
-        QVector<AVPacket*> audioPackets = audioEncoder_->encode(reinterpret_cast<const uint8_t*>(pcmChunk.constData()));
-        for (AVPacket* pkt : audioPackets) 
-        {
-            /*qDebug() << "Muxer: Writing packet for stream index" << pkt->stream_index
-                << "size:" << pkt->size
-                << "pts:" << pkt->pts
-                << "dts:" << pkt->dts;*/
-			//aacFile->write(reinterpret_cast<const char*>(pkt->data), pkt->size);
-            muxer_->writePacket(pkt);
-            av_packet_unref(pkt);
-            av_packet_free(&pkt);
-        }
+    // 2. 检查队列是否已满（这是一个软检查，可以防止过度积压）
+    if (rawVideoQueue_.isFull()) {
+        qWarning() << "Video queue is full, dropping frame to reduce latency.";
+        return;
     }
 
-    return true;
+	// 这里使用unique_ptr，只需要分配一次堆内存，如果直接使用vector，会发生两次堆内存分配：一次在此处，一次在lock_free_queue的push函数中。
+    RGBAUPtr uptr_rgba = std::make_unique<std::vector<uint8_t>>{};
+    const size_t dataSize = static_cast<size_t>(config_.videoCodecCfg_.in_width_) * config_.videoCodecCfg_.in_height_ * 4;
+    uptr_rgba->resize(dataSize);
+    memcpy(uptr_rgba->data(), rgbaData, dataSize);
+
+    // 5. 将包含数据的帧对象移入无锁队列
+    rawVideoQueue_.push(std::move(uptr_rgba));
 }
 
 bool CAVRecorder::isRecording() const
@@ -376,21 +322,9 @@ void CAVRecorder::stopThreads() {
 
     qInfo() << "Signaling all threads to stop...";
 
-    // --- 第1步：通知音频循环和UI线程停止产生新数据 ---
-    // isRunning_ = false; 会让 audioEncodingLoop 退出。
+    // isRunning_ = false; 音视频编码线程 退出。
+	// 接收到两个EOS包后，muxer线程会退出。
     // isRecording_ = false; (在 stopRecording 中设置) 会让UI线程不再推入新的视频帧。
-
-    // --- 第2步：向视频编码线程发送哨兵值 ---
-    // 这是停机链的起点。
-    // videoEncodingLoop 在 pop 出这个哨兵后会退出，
-    // 并在退出前向 encodedPacketQueue_ 推入另一个哨兵，以通知 muxingLoop。
-    /*qInfo() << "Sending EOS to video encoding queue...";
-    RawVideoFrame eos_frame;
-    eos_frame.is_end_of_stream = true;
-    rawVideoQueue_.push(std::move(eos_frame));*/
-
-    // --- 第3步：等待所有线程执行完毕 ---
-    // .join() 的逻辑和之前完全一样，它确保我们等待这条“停机链”完全执行完毕。
 
     if (audioEncoderThread_.joinable()) {
         audioEncoderThread_.join();
@@ -408,77 +342,56 @@ void CAVRecorder::stopThreads() {
     qInfo() << "All background threads have been successfully joined.";
 }
 
-MediaPacket应当取消
+void CAVRecorder::sendVecPkt(const QVector<AVPacket*>& packets, const PacketType& type)
+{
+    for (AVPacket* pkt : packets)
+    {
+        if (!pkt)
+        {
+            qDebug() << "Received a null packet, skipping.";
+			continue;
+        }
+
+		MediaPacket mediaPkt{ AVPacketUPtr{ pkt }, type };
+
+        // 将包含 AVPacket 的 MediaPacket 移入队列，所有权再次转移
+        encodedPktQueue_.push(mediaPkt);
+    }
+}
 
 void CAVRecorder::videoEncodingLoop()
 {
     qInfo() << "[Thread: VideoEncoder] Loop started.";
-    RawVideoFrame rawFrame{};
 
+    // ------------------------- 线程主循环 -------------------------
     while (isRunning_.load(std::memory_order_relaxed))
     {
-	    auto rawFramePtr = rawVideoQueue_.pop();
-        if (!rawFramePtr) 
+		// pop出来的值有两层unique_ptr，第一层是lock_free_queue的容器，第二层是存储RGBA数据的unique_ptr
+        auto container = rawVideoQueue_.pop();
+        RGBAUPtr& pRawData = *container;
+        if (!pRawData) 
         {
             // 如果队列为空，短暂休眠，避免忙等
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
-            continue; // 继续下一次循环
+            std::this_thread::sleep_for(5ms);
+            continue;
         }
-        // 从智能指针中移出数据，避免拷贝
-		rawFrame = std::move(*rawFramePtr);
 
-        QVector<AVPacket*> packets = videoEncoder_->encode(rawFrame.rgba_data.data());
-        写成lambda函数，减少代码量
-        // 3. 将编码后的裸指针AVPacket打包成MediaPacket并放入下一个队列
-        for (AVPacket* pkt : packets)
-        {
-            if (!pkt) continue; // 安全检查
-
-            MediaPacket mediaPkt;
-            mediaPkt.pkt = AVPacketUPtr(pkt); // 将裸指针的所有权交给unique_ptr
-            mediaPkt.type = PacketType::VIDEO;
-
-            // 将包含 AVPacket 的 MediaPacket 移入队列，所有权再次转移
-            encodedPacketQueue_.push(std::move(mediaPkt));
-        }
+        sendVecPkt(videoEncoder_->encode(pRawData->data()), PacketType::VIDEO);
     }
 
-	// 线程结束后，编码剩余的帧，清空rawVideoQueue_中缓存
-    while (auto rawFramePtr = rawVideoQueue_.pop())
+    // ------------------------- 线程结束后，清空rawVideoQueue_中缓存 -------------------------
+    while (auto container = rawVideoQueue_.pop())
     {
-        // 从智能指针中移出数据，避免拷贝
-        rawFrame = std::move(*rawFramePtr);
-
-        QVector<AVPacket*> packets = videoEncoder_->encode(rawFrame.rgba_data.data());
-
-        // 3. 将编码后的裸指针AVPacket打包成MediaPacket并放入下一个队列
-        for (AVPacket* pkt : packets)
-        {
-            if (!pkt) continue; // 安全检查
-
-            MediaPacket mediaPkt;
-            mediaPkt.pkt = AVPacketUPtr(pkt); // 将裸指针的所有权交给unique_ptr
-            mediaPkt.type = PacketType::VIDEO;
-
-            // 将包含 AVPacket 的 MediaPacket 移入队列，所有权再次转移
-            encodedPacketQueue_.push(std::move(mediaPkt));
-        }
+        RGBAUPtr& uptrRgba = *container;
+        sendVecPkt(videoEncoder_->encode(uptrRgba->data()), PacketType::VIDEO);
     }
 
-    // 编码完剩余的帧后，调用flush()清空编码器缓存;
-    QVector<AVPacket*> videoPackets = videoEncoder_->flush();
-    
-    for (AVPacket* pkt : videoPackets) 
-    {
-        if (!pkt) continue; // 安全检查
+    // ------------------------- 清空队列缓存后，调用flush()清空编码器缓存 -------------------------
+    sendVecPkt(videoEncoder_->flush(), PacketType::VIDEO);
 
-        MediaPacket mediaPkt;
-        mediaPkt.pkt = AVPacketUPtr(pkt); // 将裸指针的所有权交给unique_ptr
-        mediaPkt.type = PacketType::VIDEO;
-
-        // 将包含 AVPacket 的 MediaPacket 移入队列，所有权再次转移
-        encodedPacketQueue_.push(std::move(mediaPkt));
-    }
+    // ------------------------- 最后发送哨兵包，表示当前流的编码流程结束 -------------------------
+    MediaPacket eosPkt{ AVPacketUPtr{ nullptr }, PacketType::END_OF_STREAM };
+    encodedPktQueue_.push(eosPkt);
 
     qInfo() << "[Thread: VideoEncoder] Loop finished.";
 }
@@ -489,126 +402,71 @@ void CAVRecorder::audioEncodingLoop()
 
     // 获取编码一帧音频所需的确切字节数
     const int audioBytesPerFrame = audioEncoder_->getBytesPerFrame();
-    if (audioBytesPerFrame <= 0) 
+    if (audioBytesPerFrame <= 0)
     {
         qCritical() << "[Thread: AudioEncoder] Invalid audio bytes per frame. Thread will not run.";
         return;
     }
 
-    while (isRunning_.load(std::memory_order_relaxed)) 
+    // ------------------------- 线程主循环 -------------------------
+    while (isRunning_.load(std::memory_order_relaxed))
     {
-        // 1. 从音频捕获器（内部是我们的无锁环形缓冲区）读取数据
         QByteArray pcmChunk = audioCapturer_->readChunk(audioBytesPerFrame);
-
-        // 2. 检查是否有足够的数据
-        if (pcmChunk.size() < audioBytesPerFrame) 
-        {
+        if (pcmChunk.isEmpty() || pcmChunk.size() < audioBytesPerFrame)
             continue;
-        }
-
-        // 3. 数据足够，进行编码
-        QVector<AVPacket*> packets = audioEncoder_->encode(
-            reinterpret_cast<const uint8_t*>(pcmChunk.constData())
+        sendVecPkt(
+            audioEncoder_->encode(reinterpret_cast<const uint8_t*>(pcmChunk.constData())),
+            PacketType::AUDIO
         );
-
-        // 4. 将编码后的包放入队列
-        for (AVPacket* pkt : packets) 
-        {
-            if (!pkt) continue;
-
-            MediaPacket mediaPkt;
-            mediaPkt.pkt = AVPacketUPtr(pkt);
-            mediaPkt.type = PacketType::AUDIO;
-            encodedPacketQueue_.push(std::move(mediaPkt));
-        }
     }
 
-    QVector<AVPacket*> audioPackets = audioEncoder_->flush();
-    for (AVPacket* pkt : audioPackets) 
+    // ------------------------- 线程结束后，清空pcm缓冲区 -------------------------
+    while (true)
     {
-        if (!pkt) continue; // 安全检查
-
-        MediaPacket mediaPkt;
-        mediaPkt.pkt = AVPacketUPtr(pkt); // 将裸指针的所有权交给unique_ptr
-        mediaPkt.type = PacketType::AUDIO;
-
-        // 将包含 AVPacket 的 MediaPacket 移入队列，所有权再次转移
-        encodedPacketQueue_.push(std::move(mediaPkt));
+        QByteArray pcmChunk = audioCapturer_->readChunk(audioBytesPerFrame);
+        if (pcmChunk.isEmpty() || pcmChunk.size() < audioBytesPerFrame)
+            break;
+        sendVecPkt(
+            audioEncoder_->encode(reinterpret_cast<const uint8_t*>(pcmChunk.constData())),
+            PacketType::AUDIO
+        );
     }
+
+    // ------------------------- 清空pcm缓冲后，调用flush()清空编码器缓存 -------------------------
+    sendVecPkt(audioEncoder_->flush(), PacketType::AUDIO);
+
+    // ------------------------- 最后发送哨兵包，表示当前流的编码流程结束 -------------------------
+    MediaPacket eosPkt{ AVPacketUPtr{ nullptr }, PacketType::END_OF_STREAM };
+    encodedPktQueue_.push(eosPkt);
 
     qInfo() << "[Thread: AudioEncoder] Loop finished.";
 }
 
 void CAVRecorder::muxingLoop() {
     qInfo() << "[Thread: Muxer] Loop started.";
-    //bool running = true;
 
-    while (isRunning_.load(std::memory_order_relaxed)) {
-        // 1. 从队列中取出编码好的数据包
-        auto popped_packet_ptr = encodedPacketQueue_.pop();
+	int streamFin = 0; // 记录已完成的流数量
+	int streamTotal = muxer_->getFormatContext()->nb_streams; // 获取总流数量
 
-        // 2. 如果队列为空，短暂休眠，避免忙等
-        if (!popped_packet_ptr) {
-            // 如果 isRunning_ 已经关闭，说明可能不会再有新数据了，
-            // 但我们仍然需要等待哨兵包，所以继续循环。
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
-            continue;
-        }
+    // ------------------------- 线程主循环 -------------------------
+    while (streamFin < streamTotal)
+    {
+        // pop出来的值有两层unique_ptr，第一层是lock_free_queue的容器，第二层是存储packet的unique_ptr
+        auto container = encodedPktQueue_.pop();
+        MediaPacket& upPkt = *container;
 
-        muxer_->writePacket(popped_packet_ptr->pkt.get());
-
-        /*MediaPacket mediaPacket = std::move(*popped_packet_ptr);
-
-        // 3. 根据包类型进行处理
-        switch (mediaPacket.type) {
+        switch (upPkt.type)
+        {
         case PacketType::VIDEO:
         case PacketType::AUDIO:
-            // 将包写入文件/网络。unique_ptr的 .get() 方法可以获取裸指针。
-            muxer_->writePacket(mediaPacket.pkt.get());
+			muxer_->writePacket(upPkt.pkt.get());
             break;
-
         case PacketType::END_OF_STREAM:
-            // 收到哨兵包，这是我们优雅退出的信号
-            qInfo() << "[Thread: Muxer] Received EOS signal. Shutting down.";
-            //running = false; // 设置循环退出标志
-            break;
-        }*/
-    }
-
-	// 4. 循环结束后，清空无锁队列中的所有剩余包
-    while (auto popped_packet_ptr = encodedPacketQueue_.pop())
-    {
-        muxer_->writePacket(popped_packet_ptr->pkt.get());
+            qInfo() << "[Thread: Muxer] Received end of stream packet.";
+			++streamFin;
+			break;
+        }
     }
 
     qInfo() << "[Thread: Muxer] Loop finished.";
-}
-
-void CAVRecorder::enqueueVideoFrame(const unsigned char* rgbaData) {
-    // 1. 检查录制状态，如果已停止，则忽略新来的帧
-    if (!isRecording_.load(std::memory_order_relaxed) || !rgbaData) {
-        return;
-    }
-
-    // 2. 检查队列是否已满（这是一个软检查，可以防止过度积压）
-    if (rawVideoQueue_.isFull()) {
-        qWarning() << "Video queue is full, dropping frame to reduce latency.";
-        return;
-    }
-
-    // 3. 创建一个新的 RawVideoFrame
-    RawVideoFrame frame;
-    frame.width = config_.videoCodecCfg_.in_width_;
-    frame.height = config_.videoCodecCfg_.in_height_;
-	frame.is_end_of_stream = false;
-
-    // 4. 【核心】拷贝数据
-    // rgbaData 是指向PBO映射内存的指针，该内存很快就会被重用。
-    // 我们必须将数据拷贝到自己的缓冲区中，才能安全地传递给后台线程。
-    const size_t dataSize = static_cast<size_t>(frame.width) * frame.height * 4;
-    frame.rgba_data.resize(dataSize);
-    memcpy(frame.rgba_data.data(), rgbaData, dataSize);
-
-    // 5. 将包含数据的帧对象移入无锁队列
-    rawVideoQueue_.push(std::move(frame));
 }

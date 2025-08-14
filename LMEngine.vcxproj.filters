@@ -192,14 +192,14 @@
     <QtMoc Include="AVRecorder\AudioCapturer\AudioCapturer.h">
       <Filter>Source\Widget\AVRecorder\AudioCapturer</Filter>
     </QtMoc>
-    <QtMoc Include="AVRecorder\AVRecorder.h">
-      <Filter>Source\Widget\AVRecorder</Filter>
-    </QtMoc>
     <QtMoc Include="AVRecorder\AudioCapturer\IOBuffer\IOBuffer.h">
       <Filter>Source\Widget\AVRecorder\AudioCapturer\IOBuffer</Filter>
     </QtMoc>
     <QtMoc Include="RtmpPublisher\RtmpPublisher.h">
       <Filter>Source\RtmpPublisher</Filter>
+    </QtMoc>
+    <QtMoc Include="AVRecorder\AVRecorder.h">
+      <Filter>Source\Widget\AVRecorder</Filter>
     </QtMoc>
   </ItemGroup>
   <ItemGroup>
@@ -255,6 +255,9 @@
       <Filter>Source\RtmpPublisher\RtmpPush</Filter>
     </ClInclude>
     <ClInclude Include="Common\SPSCRingBuffer.h">
+      <Filter>Source\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\SingletonBase.h">
       <Filter>Source\Common</Filter>
     </ClInclude>
   </ItemGroup>

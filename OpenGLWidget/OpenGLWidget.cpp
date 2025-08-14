@@ -374,8 +374,8 @@ void OpenGLWidget::startRecord(avACT action)
 		qDebug() << "start record video to: " << config.path_.c_str();
 
 
-		Q_ASSERT(CAVRecorder::GetInstance()->initialize(config));
-		CAVRecorder::GetInstance()->startRecording();
+		Q_ASSERT(CAVRecorder::GetInstance().initialize(config));
+		CAVRecorder::GetInstance().startRecording();
 
 		isRecording_ = true;
 	}
@@ -467,7 +467,7 @@ void OpenGLWidget::recordAV(GLubyte* ptr)
 		qDebug() << "can't record video!";
 	//assert(CAVRecorder::GetInstance()->recording(ptr));
 	//CAVRecorder::GetInstance()->recording(ptr);
-	CAVRecorder::GetInstance()->enqueueVideoFrame(ptr);
+	CAVRecorder::GetInstance().pushRGBA(ptr);
 }
 
 void OpenGLWidget::rtmpPush(GLubyte* ptr)
@@ -487,7 +487,7 @@ void OpenGLWidget::stopRecord(avACT action)
 	if (action == avACT::RECORD)
 	{
 		isRecording_ = false;
-		CAVRecorder::GetInstance()->stopRecording();
+		CAVRecorder::GetInstance().stopRecording();
 	}
 	else if (action == avACT::RTMPPUSH)
 	{

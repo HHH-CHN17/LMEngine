@@ -156,12 +156,14 @@ struct AVPacketDeleter {
 
 using AVPacketUPtr = std::unique_ptr<AVPacket, AVPacketDeleter>;
 
-struct RawVideoFrame {
+using RGBAUPtr = std::unique_ptr<std::vector<uint8_t>>;
+
+/*// 注意RgbaFrame和avFrame不是一个Frame
+struct RgbaFrame {
     std::vector<uint8_t> rgba_data;
     int width;
     int height;
-	bool is_end_of_stream = false; // 用于标记是否为结束帧
-};
+};*/
 
 enum class PacketType : uint8_t
 {
