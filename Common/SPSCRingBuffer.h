@@ -3,62 +3,57 @@
 #include <vector>
 #include <atomic>
 #include <cstddef>
-#include <algorithm> 
+#include <algorithm>
+#include <cassert>
 #include <cstring>
+#include <iostream>
 #include <new>
-#include <QDebug>
+#include <numeric>
+#include <thread>
 
-#ifdef __cpp_lib_hardware_interference_size
-using std::hardware_destructive_interference_size;
-#else
-// x86 - 64ÉÏÎª64×Ö½Ú ©¦ L1_CACHE_BYTES ©¦ L1_CACHE_SHIFT ©¦ __cacheline_aligned ©¦...
-// L1»º´æĞĞ´óĞ¡Í¨³£ÊÇ64×Ö½Ú
-constexpr std::size_t hardware_destructive_interference_size = 64;
-#endif
-
-
-class SpscRingBuffer
+class SPSCRingBuffer
 {
 public:
     /**
-     * @brief ¹¹ÔìÒ»¸ö»·ĞÎ»º³åÇø¡£
-     * @param capacity »º³åÇøµÄ×ÜÈİÁ¿£¨×Ö½Ú£©£¬»á±»µ÷ÕûÎª2µÄÃİÒÔÓÅ»¯Ä£ÔËËã¡£
+     * @brief æ„é€ ä¸€ä¸ªç¯å½¢ç¼“å†²åŒºã€‚
+     * @param capacity ç¼“å†²åŒºçš„æ€»å®¹é‡ï¼ˆå­—èŠ‚ï¼‰ã€‚
      */
-    explicit SpscRingBuffer(size_t capacity)
-        : capacity_(next_power_of_2(capacity)), // Ê¹ÓÃ2µÄÃİ´ÎÈİÁ¿
-        mask_(capacity_ - 1),              // ÓÃÓÚÎ»ÔËËã´úÌæÈ¡Ä£
-        buffer_(capacity_)
+    explicit SPSCRingBuffer(size_t capacity)
+        : capacity_(capacity),
+          buffer_(capacity),
+          size_(0),
+          head_idx_(0),
+          tail_idx_(0)
     {
     }
 
-    SpscRingBuffer(const SpscRingBuffer&) = delete;
-    SpscRingBuffer& operator=(const SpscRingBuffer&) = delete;
+    SPSCRingBuffer(const SPSCRingBuffer&) = delete;
+    SPSCRingBuffer& operator=(const SPSCRingBuffer&) = delete;
 
     /**
-     * @brief [Éú²úÕßÏß³Ìµ÷ÓÃ] Ïò»º³åÇøĞ´ÈëÊı¾İ¡£
-     * @param data Ö¸ÏòÒªĞ´ÈëÊı¾İµÄÖ¸Õë¡£
-     * @param bytes ÒªĞ´ÈëµÄ×Ö½ÚÊı¡£
-     * @return Êµ¼ÊĞ´ÈëµÄ×Ö½ÚÊı£¨¿ÉÄÜĞ¡ÓÚÇëÇóÊı£¬Èç¹û»º³åÇø¿Õ¼ä²»×ã£©¡£
+     * @brief [ç”Ÿäº§è€…çº¿ç¨‹è°ƒç”¨] å‘ç¼“å†²åŒºå†™å…¥æ•°æ®ï¼ˆéé˜»å¡ï¼‰ã€‚
+     * @param data æŒ‡å‘è¦å†™å…¥æ•°æ®çš„æŒ‡é’ˆã€‚
+     * @param bytes è¦å†™å…¥çš„å­—èŠ‚æ•°ã€‚
+     * @return å®é™…å†™å…¥çš„å­—èŠ‚æ•°ï¼ˆå¯èƒ½å°äºè¯·æ±‚æ•°ï¼Œå¦‚æœç¼“å†²åŒºç©ºé—´ä¸è¶³ï¼‰ã€‚
      */
     [[nodiscard]] size_t write(const char* data, size_t bytes) noexcept
     {
-        // Ê¹ÓÃ memory_order_relaxed£¬ÒòÎªÖ»ÓĞÉú²úÕßÏß³Ì»áĞŞ¸Ä head_
-        const size_t current_head = head_.load(std::memory_order_relaxed);
-        // Ê¹ÓÃ memory_order_acquire£¬È·±£ÄÜ¿´µ½Ïû·ÑÕßÏß³Ì¶Ô tail_ µÄ×îĞÂĞŞ¸Ä
-        const size_t current_tail = tail_.load(std::memory_order_acquire);
-
-        const size_t free_space = capacity_ - (current_head - current_tail);
+        // 1. åŸºäºåŸå­è®¡æ•°å™¨ size_ è®¡ç®—å¯ç”¨ç©ºé—´
+        // ä½¿ç”¨ relaxed æ˜¯å®‰å…¨çš„ï¼Œå› ä¸ºåªæœ‰ç”Ÿäº§è€…åœ¨ write ä¸­ä¼šå¢åŠ  sizeï¼Œ
+        // æˆ‘ä»¬ä¸éœ€è¦ç«‹å³çœ‹åˆ°æ¶ˆè´¹è€…å‡å°‘ size çš„æœ€æ–°ç»“æœï¼Œåªå†™å…¥å½“å‰å·²çŸ¥çš„å¯ç”¨ç©ºé—´å³å¯ã€‚
+        const size_t current_size = size_.load(std::memory_order_relaxed);
+        const size_t free_space = capacity_ - current_size;
         const size_t bytes_to_write = std::min(bytes, free_space);
 
         if (bytes_to_write == 0) {
             return 0;
         }
 
-        // ½«Âß¼­Ë÷Òı×ª»»ÎªÎïÀíË÷Òı
-        // Ê¹ÓÃÎ»Óë²Ù×÷´úÌæÈ¡Ä££¬ÒòÎªÈİÁ¿ÊÇ2µÄÃİ
-        size_t head_idx = current_head & mask_;
+        // 2. è·å–å½“å‰å¤´éƒ¨é€»è¾‘ç´¢å¼•å¹¶è®¡ç®—ç‰©ç†ç´¢å¼•
+        const size_t current_head = head_idx_.load(std::memory_order_relaxed);
+        const size_t head_idx = current_head % capacity_;
 
-        // Êı¾İ¿ÉÄÜĞèÒª·ÖÁ½´Î¿½±´£¨µ±Ğ´²Ù×÷¿çÔ½ÁËÎïÀí»º³åÇøµÄÄ©Î²Ê±£©
+        // 3. æ‹·è´æ•°æ®ï¼ˆå¯èƒ½å› å›ç»•è€Œåˆ†ä¸¤æ¬¡ï¼‰
         size_t part1_size = std::min(bytes_to_write, capacity_ - head_idx);
         memcpy(buffer_.data() + head_idx, data, part1_size);
 
@@ -67,91 +62,119 @@ public:
             memcpy(buffer_.data(), data + part1_size, part2_size);
         }
 
-        // Ê¹ÓÃ memory_order_release£¬È·±£ÔÚ¸üĞÂ head_ Ö®Ç°£¬
-        // ÉÏÃæµÄ memcpy ²Ù×÷¶ÔËùÓĞÆäËûÏß³Ì¶¼¿É¼û¡£
-        // ÕâÊÇÉú²úÕßºÍÏû·ÑÕßÖ®¼äµÄÍ¬²½µã¡£
-        head_.store(current_head + bytes_to_write, std::memory_order_release);
+        size_.fetch_add(bytes_to_write, std::memory_order_relaxed);
+        head_idx_.store(current_head + bytes_to_write, std::memory_order_release);
 
         return bytes_to_write;
     }
 
     /**
-     * @brief [Ïû·ÑÕßÏß³Ìµ÷ÓÃ] ´Ó»º³åÇø¶ÁÈ¡Êı¾İ¡£
-     * @param data Ö¸ÏòÓÃÓÚ´æ·Å¶ÁÈ¡Êı¾İµÄ»º³åÇøµÄÖ¸Õë¡£
-     * @param bytes Òª¶ÁÈ¡µÄ×Ö½ÚÊı¡£
-     * @return Êµ¼Ê¶ÁÈ¡µÄ×Ö½ÚÊı£¨±ØĞëºÍbytesÏàµÈ£¬·ñÔòreturn 0£©¡£
+     * @brief [æ¶ˆè´¹è€…çº¿ç¨‹è°ƒç”¨] ä»ç¼“å†²åŒºè¯»å–æ•°æ®ã€‚
+     * @param data æŒ‡å‘ç”¨äºå­˜æ”¾è¯»å–æ•°æ®çš„ç¼“å†²åŒºçš„æŒ‡é’ˆã€‚
+     * @param bytes æœŸæœ›è¯»å–çš„å­—èŠ‚æ•°ã€‚
+     * @return å®é™…è¯»å–çš„å­—èŠ‚æ•°ã€‚å¦‚æœå¯ç”¨æ•°æ®å°‘äº`bytes`ï¼Œåˆ™è¿”å›0ã€‚
      */
     [[nodiscard]] size_t read(char* data, size_t bytes) noexcept
     {
-        // Ê¹ÓÃ memory_order_acquire£¬È·±£ÄÜ¿´µ½Éú²úÕßÏß³Ì¶Ô head_ µÄ×îĞÂĞŞ¸Ä
-        const size_t current_head = head_.load(std::memory_order_acquire);
-        // Ê¹ÓÃ memory_order_relaxed£¬ÒòÎªÖ»ÓĞÏû·ÑÕßÏß³Ì»áĞŞ¸Ä tail_
-        const size_t current_tail = tail_.load(std::memory_order_relaxed);
+        // 1. è·å–å¤´éƒ¨ç´¢å¼• (Acquireè¯­ä¹‰)
+        // è¿™æ˜¯å…³é”®çš„åŒæ­¥ç‚¹ï¼šç¡®ä¿èƒ½çœ‹åˆ°ç”Ÿäº§è€… release çš„ head_idx_ æ›´æ–°ï¼Œ
+        // ä»è€Œä¿è¯èƒ½çœ‹åˆ°æœ€æ–°çš„æ•°æ®ã€‚
+        const size_t current_head = head_idx_.load(std::memory_order_acquire);
+        const size_t current_tail = tail_idx_.load(std::memory_order_relaxed);
 
         const size_t bytes_available = current_head - current_tail;
-        const size_t bytes_to_read = std::min(bytes, bytes_available);
-
-        if (bytes_to_read != bytes) {
-            return 0;
+        if (bytes_available < bytes) {
+            return 0; // æ•°æ®ä¸è¶³ï¼Œä¸è¿›è¡Œéƒ¨åˆ†è¯»å–
         }
 
-        size_t tail_idx = current_tail & mask_;
+        // 2. è®¡ç®—ç‰©ç†ç´¢å¼•
+        const size_t tail_idx = current_tail % capacity_;
 
-        size_t part1_size = std::min(bytes_to_read, capacity_ - tail_idx);
+        // 3. æ‹·è´æ•°æ®ï¼ˆå¯èƒ½å› å›ç»•è€Œåˆ†ä¸¤æ¬¡ï¼‰
+        size_t part1_size = std::min(bytes, capacity_ - tail_idx);
         memcpy(data, buffer_.data() + tail_idx, part1_size);
 
-        if (bytes_to_read > part1_size) {
-            size_t part2_size = bytes_to_read - part1_size;
+        if (bytes > part1_size) {
+            size_t part2_size = bytes - part1_size;
             memcpy(data + part1_size, buffer_.data(), part2_size);
         }
 
-        // Ê¹ÓÃ memory_order_release£¬È·±£ÔÚ¸üĞÂ tail_ Ö®Ç°£¬
-        // ÆäËûÏß³Ì£¨¼´Éú²úÕß£©ÄÜ¿´µ½Õâ¿é¿Õ¼äÒÑ¾­±»ÊÍ·Å¡£
-        tail_.store(current_tail + bytes_to_read, std::memory_order_release);
+        // 4. æ›´æ–°å°¾éƒ¨é€»è¾‘ç´¢å¼• (Releaseè¯­ä¹‰)
+        // ç¡®ä¿ç”Ÿäº§è€…åœ¨ä¸‹ä¸€æ¬¡ write æ—¶èƒ½çœ‹åˆ°è¿™éƒ¨åˆ†ç©ºé—´å·²è¢«é‡Šæ”¾
+        tail_idx_.store(current_tail + bytes, std::memory_order_release);
 
-        return bytes_to_read;
+        // 5. å‡å°‘é˜Ÿåˆ—å¤§å°
+        size_.fetch_sub(bytes, std::memory_order_relaxed);
+
+        return bytes;
     }
 
-    // ·µ»Øµ±Ç°¿É¶ÁµÄÊı¾İÁ¿
-    [[nodiscard]] size_t get_size() const noexcept {
-        return head_.load(std::memory_order_acquire) - tail_.load(std::memory_order_acquire);
-    }
-
-    // ·µ»Øµ±Ç°¿ÉĞ´µÄ¿ÕÓà¿Õ¼ä
-    [[nodiscard]] size_t get_free_space() const noexcept {
-        return capacity_ - get_size();
-    }
-
-    // ·µ»Ø×ÜÈİÁ¿
-    [[nodiscard]] size_t get_capacity() const noexcept {
-        return capacity_;
-    }
+    size_t size() const noexcept
+    {
+        return size_.load(std::memory_order_relaxed);
+	}
 
 private:
-    // ¸¨Öúº¯Êı£¬¼ÆËã´óÓÚµÈÓÚvµÄ×îĞ¡µÄ2µÄÃİ
-    static size_t next_power_of_2(size_t v) {
-        // ¶ÔÓÚÒÑ¾­ÊÇ2µÄÃİµÄÊı£¬Ö±½Ó·µ»Ø
-        if (v > 0 && (v & (v - 1)) == 0) {
-            return v;
-        }
-        // ·ñÔò£¬ÕÒµ½ÏÂÒ»¸ö2µÄÃİ
-        size_t p = 1;
-        while (p < v) {
-            p <<= 1;
-        }
-        return p;
-    }
-
-private:
-    // C++17 ±ê×¼ÖĞÓÃÓÚ±ÜÃâÎ±¹²ÏíµÄ³£Á¿
-    static constexpr size_t CACHELINE_SIZE = hardware_destructive_interference_size;
-
-    // Éú²úÕßºÍÏû·ÑÕßÔÚ²»Í¬Ïß³ÌÉÏĞŞ¸Ä£¬Ê¹ÓÃ alignas ±ÜÃâÎ±¹²Ïí
-    alignas(CACHELINE_SIZE) std::atomic<size_t> head_ = { 0 };
-    alignas(CACHELINE_SIZE) std::atomic<size_t> tail_ = { 0 };
-
     const size_t capacity_;
-    const size_t mask_; // ÓÃÓÚÎ»ÔËËã´úÌæÈ¡Ä££¬mask = capacity - 1
-
     std::vector<char> buffer_;
+
+    // ä½¿ç”¨ç‹¬ç«‹çš„åŸå­ size è®¡æ•°å™¨ï¼Œé¿å…ç´¢å¼•å›ç»•é—®é¢˜
+    std::atomic<size_t> size_;
+
+    // ç”Ÿäº§è€…å’Œæ¶ˆè´¹è€…åœ¨ä¸åŒçº¿ç¨‹ä¸Šä¿®æ”¹
+    std::atomic<size_t> head_idx_;
+    std::atomic<size_t> tail_idx_;
 };
+
+
+/**
+ * @brief å¯¹SPSCç¯å½¢å­—èŠ‚ç¼“å†²åŒºè¿›è¡Œå¹¶å‘ç¨³å®šæ€§å’Œæ•°æ®å®Œæ•´æ€§æµ‹è¯•ã€‚
+ */
+inline void test_ring_buffer_stability()
+{
+    std::cout << "\n--- Running SPSCRingBuffer Stability Test ---" << std::endl;
+
+    const size_t BUFFER_CAPACITY = 1024 * 16;      // 16 KB ç¼“å†²åŒº
+    const size_t TOTAL_DATA_SIZE = 1024 * 1024 * 10; // 10 MB æ•°æ®æ€»é‡
+
+    SPSCRingBuffer buffer(BUFFER_CAPACITY);
+
+    // å‡†å¤‡æºæ•°æ® (0, 1, 2, ..., 255, 0, ...)
+    std::vector<char> source_data(TOTAL_DATA_SIZE);
+    std::iota(source_data.begin(), source_data.end(), 0);
+
+    // å‡†å¤‡ç›®æ ‡ç¼“å†²åŒº
+    std::vector<char> dest_data(TOTAL_DATA_SIZE);
+
+    // ç”Ÿäº§è€…çº¿ç¨‹
+    std::thread producer([&]() {
+        size_t bytes_written = 0;
+        while (bytes_written < TOTAL_DATA_SIZE) {
+            size_t written = buffer.write(source_data.data() + bytes_written, TOTAL_DATA_SIZE - bytes_written);
+            bytes_written += written;
+        }
+    });
+
+    // æ¶ˆè´¹è€…çº¿ç¨‹
+    std::thread consumer([&]() {
+        size_t bytes_read = 0;
+        while (bytes_read < TOTAL_DATA_SIZE) {
+            // æˆ‘ä»¬è¦æ±‚ä¸€æ¬¡æ€§è¯»å–ï¼Œæ‰€ä»¥å¦‚æœreadè¿”å›0ï¼Œå°±ç»§ç»­å°è¯•
+            size_t read_bytes = buffer.read(dest_data.data() + bytes_read, 256); // å°è¯•ä¸€æ¬¡è¯»256å­—èŠ‚
+            if(read_bytes > 0) {
+                 bytes_read += read_bytes;
+            } else {
+                 std::this_thread::yield(); // å¦‚æœæ²¡è¯»åˆ°æ•°æ®ï¼Œè®©å‡ºCPU
+            }
+        }
+    });
+
+    producer.join();
+    consumer.join();
+
+    // éªŒè¯ç»“æœ
+    std::cout << "Verifying results..." << std::endl;
+    assert(source_data == dest_data);
+    std::cout << "  [OK] Data integrity test passed." << std::endl;
+    std::cout << "Test PASSED!" << std::endl;
+}

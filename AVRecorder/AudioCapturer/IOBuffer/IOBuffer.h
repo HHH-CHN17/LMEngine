@@ -5,6 +5,7 @@
 #include <QByteArray>
 #include <QMutex>
 #include "./Common/SPSCRingBuffer.h"
+#include "Common/SPSCRingBuffer.h"
 
 class CIOBuffer : public QIODevice
 {
@@ -30,7 +31,7 @@ protected:
 private:
     //mutable QMutex mtx_;
     //QByteArray buffer_; // buffer 在内部管理，不再依赖外部指针
-    SpscRingBuffer ringBuffer_{4 * 1024 * 1024}; // 分配4MB容量
+    SPSCRingBuffer ringBuffer_{4 * 1024 * 1024}; // 分配4MB容量
 };
 
 #endif // IOBUFFER_H

@@ -118,7 +118,8 @@ HEADERS += \
     ./Common/ShaderProgram/GLShaderProgram.h \
     ./Common/Camera/GLCamera.h \
     ./Common/DataDefine.h \
-    ./Common/LockFreeQueue.h \
+    ./Common/MPMCQueue.h \
+    ./Common/SPSCQueue.h \
     ./Common/SPSCRingBuffer.h \
     ./Common/SingletonBase.h \
     ./RtmpPublisher/RtmpPublisher.h \

@@ -210,11 +210,11 @@ void CAVRecorder::pushRGBA(const unsigned char* rgbaData) {
         return;
     }
 
-    // 2. 检查队列是否已满（这是一个软检查，可以防止过度积压）
-    if (rawVideoQueue_.isFull()) {
+    /*// 2. 检查队列是否已满（这是一个软检查，可以防止过度积压）
+    if (rawVideoQueue_.is_full()) {
         qWarning() << "Video queue is full, dropping frame to reduce latency.";
         return;
-    }
+    }*/
 
 	// 这里使用unique_ptr，只需要分配一次堆内存，如果直接使用vector，会发生两次堆内存分配：一次在此处，一次在lock_free_queue的push函数中。
     auto uptr_rgba = std::make_unique<std::vector<uint8_t>>();
@@ -223,7 +223,7 @@ void CAVRecorder::pushRGBA(const unsigned char* rgbaData) {
     memcpy(uptr_rgba->data(), rgbaData, dataSize);
 
     // 5. 将包含数据的帧对象移入无锁队列
-    rawVideoQueue_.push(std::move(uptr_rgba));
+    rawVideoQueue_.push(std::move(uptr_rgba), false);
 }
 
 bool CAVRecorder::isRecording() const
@@ -290,7 +290,7 @@ void CAVRecorder::sendVecPkt(const QVector<AVPacket*>& packets, const PacketType
 		MediaPacket mediaPkt{ AVPacketUPtr{ pkt }, type };
 
         // 将包含 AVPacket 的 MediaPacket 移入队列，所有权再次转移
-        encodedPktQueue_.push(std::move(mediaPkt));
+        encodedPktQueue_.push(std::move(mediaPkt), true);
     }
 }
 
@@ -332,7 +332,7 @@ void CAVRecorder::videoEncodingLoop()
 
     // ------------------------- 最后发送哨兵包，表示当前流的编码流程结束 -------------------------
     MediaPacket eosPkt{ AVPacketUPtr{ nullptr }, PacketType::END_OF_STREAM };
-    encodedPktQueue_.push(std::move(eosPkt));
+    encodedPktQueue_.push(std::move(eosPkt), true);
 
     qInfo() << "[Thread: VideoEncoder] Loop finished.";
 }
@@ -382,7 +382,7 @@ void CAVRecorder::audioEncodingLoop()
 
     // ------------------------- 最后发送哨兵包，表示当前流的编码流程结束 -------------------------
     MediaPacket eosPkt{ AVPacketUPtr{ nullptr }, PacketType::END_OF_STREAM };
-    encodedPktQueue_.push(std::move(eosPkt));
+    encodedPktQueue_.push(std::move(eosPkt), true);
 
     qInfo() << "[Thread: AudioEncoder] Loop finished.";
 }

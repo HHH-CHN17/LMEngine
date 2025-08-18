@@ -259,6 +259,8 @@
   <ItemGroup>
     <ClInclude Include="Common\SingletonBase.h" />
     <ClInclude Include="Common\SPSCRingBuffer.h" />
+    <ClInclude Include="Common\SPSCQueue.h" />
+    <ClInclude Include="Common\MPMCQueue.h" />
     <ClInclude Include="RtmpPublisher\RtmpPush\RtmpPush.h" />
     <QtMoc Include="RtmpPublisher\RtmpPublisher.h" />
     <QtMoc Include="AVRecorder\AudioCapturer\AudioCapturer.h" />
@@ -268,7 +270,6 @@
     <ClInclude Include="AVRecorder\Muxer\Muxer.h" />
     <ClInclude Include="AVRecorder\VideoEncoder\VideoEncoder.h" />
     <ClInclude Include="Common\Camera\GLCamera.h" />
-    <ClInclude Include="Common\LockFreeQueue.h" />
     <ClInclude Include="Common\ShaderProgram\GLShaderProgram.h" />
     <ClInclude Include="Common\DataDefine.h" />
     <QtMoc Include="OpenGLWidget\SceneManger\Object\Sun\GLSun.h" />

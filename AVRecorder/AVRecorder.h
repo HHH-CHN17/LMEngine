@@ -1,7 +1,6 @@
 #pragma once
 
 #include "AudioEncoder/AudioEncoder.h"
-#include "Common/LockFreeQueue.h"
 #include "Common/SingletonBase.h"
 #include "Muxer/Muxer.h"
 #include "VideoEncoder/VideoEncoder.h"
@@ -21,6 +20,8 @@ extern "C" {
 #include <QFile>
 #include "AVRecorder/AudioCapturer/AudioCapturer.h"
 #include "Common/DataDefine.h"
+#include "Common/MPMCQueue.h"
+#include "Common/SPSCQueue.h"
 
 
 /**
@@ -155,8 +156,8 @@ private:
     std::thread muxerThread_;
 
     // 两个核心队列
-    lock_free_queue<RGBAUPtr, 60> rawVideoQueue_; // 缓冲约2秒的30fps视频帧
-    lock_free_queue<MediaPacket, 300> encodedPktQueue_; // 缓冲编码后的音视频包
+    SPSCQueue<RGBAUPtr> rawVideoQueue_{60}; // 缓冲约2秒的30fps视频帧
+    MPMCQueue<MediaPacket> encodedPktQueue_{300}; // 缓冲编码后的音视频包
 
     // 线程运行控制标志
     /// @brief 全局运行标志。当设置为false时，关闭音视频编码线程。

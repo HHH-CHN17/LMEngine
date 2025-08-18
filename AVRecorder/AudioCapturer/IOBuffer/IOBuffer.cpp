@@ -69,7 +69,7 @@ qint64 CIOBuffer::bytesAvailable() const
     /*QMutexLocker locker(&mtx_);
     return buffer_.size();*/
 
-    return ringBuffer_.get_size();
+    return ringBuffer_.size();
 }
 
 // 这个函数我们不再主动使用，但为了保持 QIODevice 的完整性可以简单实现
