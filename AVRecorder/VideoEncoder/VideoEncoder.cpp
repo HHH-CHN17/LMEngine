@@ -175,6 +175,7 @@ QVector<AVPacket*> CVideoEncoder::encode(const unsigned char* rgbData)
     sws_scale(swsCtx_, inData, inLinesize, 0, inHeight_, yuvFrame_->data, yuvFrame_->linesize);
 
     // --- 2. 设置时间戳 (PTS) ---
+	// 这是一种经典的方式实现恒定帧率（CFR）编码，但对于可变帧率（VFR）是完全不适用的
     yuvFrame_->pts = ptsCnt_++;
 
     // --- 3. 调用核心编码函数 ---
