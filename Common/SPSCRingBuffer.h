@@ -82,6 +82,9 @@ public:
         const size_t current_head = head_idx_.load(std::memory_order_acquire);
         const size_t current_tail = tail_idx_.load(std::memory_order_relaxed);
 
+		// 注意无符号数的减法：a - b = (a + b的补数) % 2^n，其中b的补数=2^n - b
+		// 无符号整数减法通过其固有的回绕特性，可以准确地计算出了两者之间的逻辑距离！
+		// 不过前提是缓冲区的容量 capacity_ 必须小于或等于无符号索引类型最大值的一半。原因见：【无锁数据结构：C++实战】
         const size_t bytes_available = current_head - current_tail;
         if (bytes_available < bytes) {
             return 0; // 数据不足，不进行部分读取
@@ -121,9 +124,9 @@ private:
     // 使用独立的原子 size 计数器，避免索引回绕问题
     std::atomic<size_t> size_;
 
-    // 生产者和消费者在不同线程上修改
-    std::atomic<size_t> head_idx_;
-    std::atomic<size_t> tail_idx_;
+    // 要把环形数组想象成一条蛇
+    std::atomic<size_t> head_idx_;	// 写入索引，队列的逻辑尾部
+    std::atomic<size_t> tail_idx_;	// 读取索引，逻辑头部
 };
 
 

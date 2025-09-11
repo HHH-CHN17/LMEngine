@@ -47,7 +47,7 @@ void CGLCamera::setKeyPress(Camera_Movement direction, qint64 deltaTime)
         this->position_ -= this->cameraWorldUp * sensitivity;
 }
 
-// 其中yaw_指的是 摄像机镜头的方向 与x轴正方向的夹角，pitch_指的是 摄像机镜头的方向 与z轴负方向的夹角
+// 其中yaw_指的是 摄像机镜头的方向 与xz平面上x轴正方向的夹角，pitch_指的是 摄像机镜头的方向 与yz平面z轴负方向的夹角
 void CGLCamera::setMouseMove(float xoffset, float yoffset, bool constraintPitch)
 {
     xoffset *= this->mouseSensitivity;
