@@ -228,6 +228,7 @@ void CRtmpPublisher::startPush()
     // ------------------------- 发送流媒体数据之前，需要发送H.264和AAC的配置信息 -------------------------
 
     std::vector<uint8_t> sps{}, pps{}, asc{};
+    // 如果 H.264 编码器没有设置 AV_CODEC_FLAG_GLOBAL_HEADER 标志，那么对于一个视频序列，可能输出一个sps和多个pps
     if (!getH264Config(sps, pps))
     {
         qCritical() << "Failed to get H.264 config.";
@@ -235,6 +236,7 @@ void CRtmpPublisher::startPush()
         return;
 	}
 
+    // 如果 AAC 编码器没有设置 AV_CODEC_FLAG_GLOBAL_HEADER 标志，那么它输出的每一个 AVPacket 中，都将包含一个 ADTS (Audio Data Transport Stream) 头
     if (!getAacConfig(asc))
     {
         qCritical() << "Failed to get AAC config.";
@@ -331,7 +333,6 @@ bool CRtmpPublisher::pushing(const unsigned char* rgbData)
             {
                 // FFmpeg 的 aac 编码器在全局头模式下，
 				// 有时会先输出一个包含 "Lavc" 版本信息的非音频数据包。
-                // 如果 AAC 编码器没有设置 AV_CODEC_FLAG_GLOBAL_HEADER 标志，那么它输出的每一个 AVPacket 中，都将包含一个 ADTS (Audio Data Transport Stream) 头
                 if (pkt->size > 4 && pkt->data[0] == 0xDE && pkt->data[1] == 0x04) 
                 {
                     qDebug() << "Skipping first AAC info packet (Lavc).";
