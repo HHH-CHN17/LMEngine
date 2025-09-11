@@ -331,6 +331,7 @@ bool CRtmpPublisher::pushing(const unsigned char* rgbData)
             {
                 // FFmpeg 的 aac 编码器在全局头模式下，
 				// 有时会先输出一个包含 "Lavc" 版本信息的非音频数据包。
+                // 如果 AAC 编码器没有设置 AV_CODEC_FLAG_GLOBAL_HEADER 标志，那么它输出的每一个 AVPacket 中，都将包含一个 ADTS (Audio Data Transport Stream) 头
                 if (pkt->size > 4 && pkt->data[0] == 0xDE && pkt->data[1] == 0x04) 
                 {
                     qDebug() << "Skipping first AAC info packet (Lavc).";
