@@ -171,21 +171,21 @@ void CGLModel::calculateTBN()
 
 		float mu = 1 / (deltaU1 * deltaV2 - deltaV1 * deltaU2);
 
-		glm::vec3 tagent = mu * glm::vec3{ deltaV2 * E1 - deltaV1 * E2 };
+        glm::vec3 tangent = mu * glm::vec3{ deltaV2 * E1 - deltaV1 * E2 };
 
 		glm::vec3 bitangent = mu * glm::vec3{ -deltaU2 * E1 + deltaU1 * E2 };
 
 		// 此时我们得到了tagent和bitangent，但他们：1. 没有和法线正交化；2. 没有归一化
 
 		// 施密特正交化
-		/*glm::vec3 normal = {
+        glm::vec3 normal = {
 			vertices_[i].norm.x,
 			vertices_[i].norm.y,
 			vertices_[i].norm.z
-		};*/
-		glm::vec3 normal = glm::cross(tangent, bitangent);
+        };
+        //glm::vec3 normal = glm::cross(tangent, bitangent);
 		//											// 法线的方向				// 点乘结果表示tagent在法线方向上的投影长度
-		glm::vec3 T = glm::normalize(tagent - glm::normalize(normal) * glm::dot(tagent, glm::normalize(normal)));
+        glm::vec3 T = glm::normalize(tangent - glm::normalize(normal) * glm::dot(tangent, glm::normalize(normal)));
 		glm::vec3 B = glm::normalize(glm::cross(normal, T));
 		glm::vec3 N = glm::normalize(normal);
 
@@ -201,9 +201,9 @@ void CGLModel::calculateTBN()
 			vertices_[i + j].bitan.z = B.z;
 
 			// 注意这里的 vertices_[x].norm 表示的是.obj文件中每个顶点的法线，不是TBN矩阵的N向量，所以我们需要在 mesh.vs 中通过T,B重新计算N向量
-			/*vertices_[i + j].norm.x = N.x;
+            /*vertices_[i + j].norm.x = N.x;
 			vertices_[i + j].norm.y = N.y;
-			vertices_[i + j].norm.z = N.z;*/
+            vertices_[i + j].norm.z = N.z;*/
 		}
 	}
 }
