@@ -125,13 +125,13 @@ void CGLMesh::draw(const glm::mat4& view, const glm::mat4& projection, const glm
 	// 将法线贴图texture传给2号采样器
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, normalTexID_);
-	pShaderProg_->set1f("material.shininess", 32.0f);
+	pShaderProg_->set1f("material.shininess", 512.0f);
 
 	// ------------------------- 设置灯光信息 -------------------------
 	pShaderProg_->setVec3("light.position", lightPos);
 	pShaderProg_->setVec3("light.ambient", { 0.2f, 0.2f, 0.2f });
 	pShaderProg_->setVec3("light.diffuse", { 1.0f, 1.0f, 1.0f }); // 将光照调暗了一些以搭配场景
-	pShaderProg_->setVec3("light.specular", { 0.2f, 0.2f, 0.2f });
+	pShaderProg_->setVec3("light.specular", { 1.0f, 1.0f, 1.0f });
 
 	// ------------------------- 设置摄像机位置 -------------------------
 	pShaderProg_->setVec3("viewPos", viewPos);

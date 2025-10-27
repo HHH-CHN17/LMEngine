@@ -29,12 +29,12 @@ flowchart TD
     end
 
     Z -- "原始视频帧" --> Y
-    Y -- "人脸关键点/姿态" --> A
+    Y -- "处理后的视频帧 (YUV)<br>人脸关键点/姿态" --> A
 
-    A -- "合成后视频 (RGB)" --> C
+    A -- "合成后视频 (RGB->YUV)" --> C
     B -- "原始音频 (PCM)" --> C
 
-    A -- "合成后视频 (RGB)" --> D
+    A -- "合成后视频 (RGB->YUV)" --> D
     B -- "原始音频 (PCM)" --> D
 
     C -- "编码并封装" --> E
@@ -91,7 +91,7 @@ flowchart TD
         end
     end
 
-    O["合成后视频帧"]
+    O["合成后视频帧 (RGB)"]
 
     A -- "更新状态" --> TC
     TC -- "View/Proj 矩阵" --> P1
@@ -117,21 +117,31 @@ flowchart TD
 
 流程说明
 
-1.  **外部依赖与输入**:
-    *   `CGLCamera` 根据 `用户输入` 计算 **视图/投影矩阵**。
-    *   `GLShaderProgram` 预先编译，定义了渲染所需的着色器逻辑。
-    *   `VideoCaptureThread` 提供实时的 **视频纹理ID**。
+1. **外部依赖与输入**:
+   *   `CGLCamera` 根据 `用户输入` 计算 **视图/投影矩阵**。
+   *   `GLShaderProgram` 预先编译，定义了渲染所需的着色器逻辑。
+   *   `VideoCaptureThread` 提供实时的 **视频纹理ID**。
 
-2.  **`paintGL` 核心渲染流程**:
-    *   **场景绘制**: `GLSceneManager.draw()` 被调用，它从外部获取矩阵和纹理ID。
-    *   **对象绘制**: `GLSceneManager` 依次调用其管理的四个子对象 (`CGLSkybox`, `CGLFrame`, `CGLSun`, `CGLModel`) 的 `draw` 方法。
-    *   **提交API**: 每个子对象通过调用 `glDrawArrays` 或 `glDrawElements` 等 **OpenGL API** 函数来提交自己的绘制指令。
-    *   **GPU渲染**: GPU根据当前绑定的`GLShaderProgram`和提交的顶点数据，执行渲染管线，并将结果输出到 **SceneFBO**。
-    *   **分辨率转换**: 调用 `glBlitFramebuffer` 函数，将 `SceneFBO` 的内容传输到 **RecordFBO**。这个过程可以同时进行分辨率的缩放，从而使屏幕渲染分辨率与最终录制分辨率分离。
-    *   **数据回读**: 通过 **PBO** (像素缓冲对象) 从 **RecordFBO** 中异步地将图像数据回读到CPU内存。
+2. **`paintGL` 核心渲染流程**:
+   *   **场景绘制**: `GLSceneManager.draw()` 被调用，它从外部获取矩阵和纹理ID。
+   *   **对象绘制**: `GLSceneManager` 依次调用其管理的四个子对象 (`CGLSkybox`, `CGLFrame`, `CGLSun`, `CGLModel`) 的 `draw` 方法。
+   *   **提交API**: 每个子对象通过调用 `glDrawArrays` 或 `glDrawElements` 等 **OpenGL API** 函数来提交自己的绘制指令。
+   *   **GPU渲染**: GPU根据当前绑定的`GLShaderProgram`和提交的顶点数据，执行渲染管线，并将结果输出到 **SceneFBO**。
+   *   **分辨率转换**: 调用 `glBlitFramebuffer` 函数，将 `SceneFBO` 的内容传输到 **RecordFBO**。这个过程可以同时进行分辨率的缩放，从而使屏幕渲染分辨率与最终录制分辨率分离。
+   *   **数据回读**: 通过 **PBO** (像素缓冲对象) 从 **RecordFBO** 中异步地将图像数据回读到CPU内存。
 
-3.  **输出**:
-    *   PBO将数据从GPU传输至CPU后，生成一份 **合成后的视频帧**，交付给后续模块。
+3. **输出**:
+   *   PBO将数据从GPU传输至CPU后，生成一份 **合成后的视频帧（RGB）**，交付给后续模块。
+
+4. 注意：
+
+   显然我们可以发现，由于后续H.264编码器要求输入的视频帧格式为YUV420P，所以我们会在cpu中把RGB格式的视频帧转换成YUV420P，这会造成性能瓶颈，所以我们可以在GPU中做，具体请参考：[使用 OpenGL 实现 RGB 到 YUV 的图像格式转换-腾讯云开发者社区-腾讯云](https://cloud.tencent.com/developer/article/1828544)
+
+   大致思路是：
+
+   1. 创建一个`convertFBO_`，输入纹理使用`recordTexID_`，输出纹理命名为`convertTexID_`
+   2. 在片段着色器中采样`recordTexID_`的rgb值，将其转换为YUV格式，并将结果写入当前片段的rgb分量中
+   3. 通过`glReadPixels()`读取`convertFBO_`中的渲染结果（可以用双PBO优化），此时得到的数据应该是YUV420PACKED，或许还需要转换为YUV420P
 
 ### 2.2 音视频录制模块
 
@@ -196,7 +206,6 @@ flowchart TD
 1.  **一级数据缓冲**:
     *   **视频**: **UI线程**通过`AVRecorder::pushRGBA()`将原始视频帧推入`SPSC队列 (rawVideoQueue)`。
     *   **音频**: **音频采集线程**将PCM数据写入`环形缓冲区 (audioIOBuffer)`。这两个容器作为一级缓冲，独立于其他所有模块。
-
 2.  **后台工作与二级缓冲**:
     *   **编码**: “视频编码线程”和“音频编码线程”分别从一级缓冲中获取数据，编码为`AVPacket`。
     *   **缓冲**: 编码后的两种`AVPacket`都被推送到位于“后台工作线程”模块内部的`MPMC队列 (encodedPktQueue)`中，作为二级缓冲。
@@ -488,6 +497,12 @@ void parse_annexb_stream(const std::vector<uint8_t>& stream_data) {
 
 1. 生产者线程中，`tail_`的发布需要与【消费者线程中的`tail_`的获取】建立先行关系，使生产者对`tail_`的修改对消费者可见。
 2. 消费者线程中，`size_`的发布需要与【生产者线程中的`size_`的获取】建立先行关系，使消费者对`size_`的修改对生产者可见。
+
+如何理解以上两点呢？
+
+对于第一点，我们需要关注的是：pop线程需要`tail_`来判断队列是否为空
+
+对于第二点，我们需要关注的是：push线程需要`size_`来判断队列是否还能继续push数据
 
 ##### 异常安全保证
 

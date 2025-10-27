@@ -35,7 +35,7 @@ void main()
 	
 	// 纹理颜色
 	vec3 diffuseColor = texture(material.diffuse, TexCoords).rgb;
-	vec3 specularColor = texture(material.specular, TexCoords).rgb;
+	vec3 specularStrength = texture(material.specular, TexCoords).rgb;
 	
 	// 计算环境光
     vec3 ambientLight = diffuseColor * light.ambient;
@@ -48,9 +48,10 @@ void main()
 	// 计算镜面反射光
 	vec3 viewDir = normalize(viewPos - FragPos);						// 注意这里算出来的方向与实际的观察方向相反
 	vec3 reflectDir = reflect(-lightDir, normal);
-	vec3 halfwayDir = normalize(lightDir + viewDir);  
-	float deltaSpecular = pow(max(dot(normal, halfwayDir), 0.0f), material.shininess);
-	vec3 specularLight = specularColor * light.specular * deltaSpecular;
+	// vec3 halfwayDir = normalize(lightDir + viewDir);  
+	// float deltaSpecular = pow(max(dot(normal, halfwayDir), 0.0f), material.shininess);
+	float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+	vec3 specularLight = specularStrength * light.specular * spec;
 
     vec3 result = ambientLight + diffuseLight + specularLight;
     //vec3 result = diffuseColor;
